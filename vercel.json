@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "name": "syncsenta-education-os",
+  "builds": [
+    {
+      "src": "studio/package.json",
+      "use": "@vercel/next"
+    },
+    {
+      "src": "ai-agents/requirements.txt",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/agents/(.*)",
+      "dest": "ai-agents/src/syncsenta_agents/api/server.py"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "studio/$1"
+    }
+  ],
+  "env": {
+    "GROQ_API_KEY": "@groq_api_key",
+    "GROQ_MODEL": "llama-3.3-70b-versatile",
+    "LLM_PROVIDER": "groq",
+    "NEXT_PUBLIC_AI_AGENTS_URL": "https://syncsenta-education-os.vercel.app/api/agents"
+  }
+}
