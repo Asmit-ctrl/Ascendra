@@ -259,3 +259,18 @@ export function getSubjectsForGrade(grade: string): string[] {
   if (num >= 7 && num <= 9) return juniorSecondarySubjects;
   return upperPrimarySubjects;
 }
+
+export function getAllGrades(): string[] {
+  return grades;
+}
+
+export function getCurriculumData(grade: string, subject: string): StrandInfo[] | null {
+  return getHardcodedStrands(grade, subject);
+}
+
+export function getWeeklyDistribution(grade: string, subject: string): { weeks: number; lessonsPerWeek: number } {
+  return {
+    weeks: 13, // Standard term length
+    lessonsPerWeek: getLessonsPerWeek(grade, subject)
+  };
+}
