@@ -20,16 +20,5 @@
       "src": "/(.*)",
       "dest": "studio/$1"
     }
-  ],
-  "env": {
-    "GROQ_API_KEY": "@groq_api_key",
-    "GROQ_MODEL": "llama-3.3-70b-versatile",
-    "LLM_PROVIDER": "groq",
-    "ENVIRONMENT": "production"
-  },
-  "build": {
-    "env": {
-      "GROQ_API_KEY": "@groq_api_key"
-    }
-  }
+  ]
 }
