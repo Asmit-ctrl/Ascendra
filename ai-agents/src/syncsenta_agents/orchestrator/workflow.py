@@ -233,8 +233,11 @@ If multiple agents are needed, respond with MULTI_AGENT.
                 prompt
             )
             
-            # Parse response
-            agent_type = response.strip().upper()
+            # Parse response - extract content from AIMessage
+            if hasattr(response, 'content'):
+                agent_type = response.content.strip().upper()
+            else:
+                agent_type = str(response).strip().upper()
             
             # Map to routing decision
             routing_map = {
@@ -572,7 +575,10 @@ Create a coherent, educational response that:
             synthesis_prompt
         )
 
-        return synthesized.strip()
+        # Extract content from AIMessage
+        if hasattr(synthesized, 'content'):
+            return synthesized.content.strip()
+        return str(synthesized).strip()
     
     async def _handle_error(self, state: AgentState) -> AgentState:
         """Handle errors with graceful fallback."""
