@@ -1,5 +1,33 @@
 # Deploy Python Backend to Render
 
+## Current Status
+
+**Build Status**: ✅ Fixed  
+**Solution**: Added back minimal LangChain/LangGraph dependencies
+
+### What Was Fixed
+
+The runtime error "ModuleNotFoundError: No module named 'langgraph'" has been resolved by adding back required dependencies to `ai-agents/pyproject.toml`:
+
+- `langchain` - Core LangChain framework
+- `langchain-core` - Core abstractions
+- `langchain-community` - Community integrations
+- `langgraph` - Workflow orchestration
+- `langchain-groq` - Groq integration for LangChain
+
+**Why these are needed**:
+- Teacher dashboard calls `/agents/chat` endpoint
+- This endpoint uses `SyncSentaOrchestrator`
+- Orchestrator uses `LangGraphOrchestrator` for intelligent routing between AI agents
+- LangGraph provides workflow management for complex multi-agent interactions
+
+**Architecture Flow**:
+```
+Teacher Dashboard → /agents/chat → SyncSentaOrchestrator → LangGraphOrchestrator → Groq AI
+```
+
+---
+
 ## What Changed
 
 ✅ **Vercel** - Now deploys ONLY the Next.js frontend (studio)
@@ -29,7 +57,7 @@
 ### Option B: Using render.yaml (Automatic)
 
 The `ai-agents/render.yaml` file is already configured. Render will:
-- ✅ Auto-detect Python 3.11
+- ✅ Auto-detect Python 3.11 (from `runtime.txt`)
 - ✅ Install dependencies from `pyproject.toml`
 - ✅ Start the FastAPI server on port 8001
 - ✅ Provide a public URL like: `https://syncsenta-ai-backend.onrender.com`
@@ -85,9 +113,9 @@ const response = await fetch(`${apiUrl}/agents/chat`, {
 
 1. **Test Backend** (Render):
    ```bash
-   curl https://syncsenta-ai-backend.onrender.com/health
+   curl https://syncsenta-ai-backend.onrender.com/healthz
    ```
-   Should return: `{"status": "healthy"}`
+   Should return: `{"status": "ok", "offline_demo": false}`
 
 2. **Test Frontend** (Vercel):
    - Go to your Vercel URL
@@ -115,6 +143,7 @@ const response = await fetch(`${apiUrl}/agents/chat`, {
 │  https://syncsenta-ai-backend.onrender.com  │
 │                                             │
 │  - FastAPI Server (ai-agents/)              │
+│  - LangGraph Orchestrator                   │
 │  - Groq AI Integration                      │
 │  - Assessment Agents                        │
 │  - Telemetry Processing                     │
@@ -127,7 +156,7 @@ const response = await fetch(`${apiUrl}/agents/chat`, {
 │  Groq API                                   │
 │  https://api.groq.com                       │
 │                                             │
-│  - LLM Inference                            │
+│  - LLM Inference (llama-3.3-70b-versatile)  │
 │  - Content Generation                       │
 └─────────────────────────────────────────────┘
 ```
@@ -162,6 +191,11 @@ const response = await fetch(`${apiUrl}/agents/chat`, {
 - Consider upgrading to paid tier
 - Or implement a keep-alive ping
 
+### LangChain/LangGraph Import Errors
+- ✅ Fixed: Dependencies added back to `pyproject.toml`
+- If issues persist, check Render build logs
+- Verify Python 3.11 is being used (check `runtime.txt`)
+
 ## Cost Summary
 
 - **Vercel**: Free tier (hobby plan)
@@ -176,9 +210,11 @@ const response = await fetch(`${apiUrl}/agents/chat`, {
 
 ## Next Steps
 
-1. ✅ Deploy backend to Render
-2. ✅ Get backend URL
-3. ✅ Update frontend environment variables
-4. ✅ Redeploy Vercel
-5. ✅ Test end-to-end
-6. 🎉 Your app is live!
+1. ✅ Push changes to GitHub (pyproject.toml updated)
+2. ✅ Deploy backend to Render
+3. ✅ Get backend URL
+4. ✅ Update frontend environment variables
+5. ✅ Redeploy Vercel
+6. ✅ Test end-to-end
+7. 🎉 Your app is live!
+
