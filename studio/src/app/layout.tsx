@@ -12,10 +12,11 @@ const fontSans = Inter({
 })
 
 export const metadata: Metadata = {
-  title: 'SyncSenta',
-  description: 'AI-powered Kenyan education ecosystem',
+  title: 'SyncSenta - AI Education for Kenya',
+  description: 'AI-powered education platform aligned with Kenyan CBC curriculum',
   icons: {
-    icon: '/logo.svg',
+    icon: '/favicon.svg',
+    apple: '/favicon.svg',
   },
 };
 

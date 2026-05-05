@@ -73,6 +73,10 @@ app.add_middleware(
 # Include teacher dashboard routes
 app.include_router(dashboard_router)
 
+# Include telemetry routes
+from .telemetry_api import router as telemetry_router
+app.include_router(telemetry_router)
+
 
 def _build_agent() -> AssessmentAgent:
     """Build the agent. If SYNCSENTA_OFFLINE_DEMO=1, use a deterministic stub

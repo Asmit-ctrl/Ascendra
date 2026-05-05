@@ -1,11 +1,5 @@
-"use client"
-
-import { MagicSchoolTeacher } from '@/components/teacher/magic-school-teacher'
+import { EnhancedTeacherDashboard } from '@/components/teacher/enhanced-teacher-dashboard'
 
 export default function TeacherPage() {
-  return (
-    <div className="min-h-screen bg-background">
-      <MagicSchoolTeacher />
-    </div>
-  )
+  return <EnhancedTeacherDashboard />
 }

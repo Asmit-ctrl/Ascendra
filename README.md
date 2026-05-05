@@ -59,25 +59,34 @@ Visit:
 
 ```
 syncsenta/
-├── studio/              # Next.js frontend
+├── studio/              # Frontend (Next.js + TypeScript)
 │   ├── src/
 │   │   ├── app/        # Pages (student, teacher)
-│   │   └── components/ # React components
+│   │   ├── components/ # React components
+│   │   └── data/       # CBC curriculum data
 │   └── package.json
 │
-├── ai-agents/          # Python FastAPI backend
+├── ai-agents/          # Backend (FastAPI + Python)
 │   ├── src/syncsenta_agents/
 │   │   ├── api/       # API endpoints
 │   │   ├── agents/    # AI agents (tutoring, assessment)
-│   │   └── orchestrator/ # Request routing
-│   └── requirements.txt
+│   │   ├── orchestrator/ # Multi-agent orchestration
+│   │   └── inference/ # Groq AI client
+│   └── pyproject.toml
 │
-├── docs/               # Documentation
-├── scripts/            # Utility scripts
-├── notebooks/          # Jupyter notebooks
-├── .env                # Environment configuration
+├── docs/               # All documentation
+│   ├── deployment/    # Deployment guides
+│   ├── development/   # Development setup
+│   ├── status/        # Implementation status
+│   └── architecture/  # System design
+│
+├── scripts/            # Build and utility scripts
+├── .kiro/              # Kiro AI specs and configuration
+├── .env                # Environment variables (gitignored)
 └── vercel.json         # Vercel deployment config
 ```
+
+See [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) for detailed documentation.
 
 ## 🎓 Features
 
@@ -137,8 +146,10 @@ GROQ_API_KEY_3=gsk_backup_key_2_here
 
 ## 📚 Documentation
 
-- **[Vercel Deployment Guide](VERCEL_DEPLOYMENT.md)** - Step-by-step deployment
+- **[Project Structure](PROJECT_STRUCTURE.md)** - Complete directory structure
+- **[Vercel Deployment Guide](docs/deployment/VERCEL_DEPLOYMENT.md)** - Step-by-step deployment
 - **[Groq Setup Guide](docs/development/GROQ_SETUP.md)** - AI configuration
+- **[Adaptive Learning Status](docs/status/ADAPTIVE_LEARNING_STATUS.md)** - Current implementation status
 - **[Architecture Overview](docs/architecture/)** - System design
 - **[Development Guide](docs/development/)** - Contributing
 
