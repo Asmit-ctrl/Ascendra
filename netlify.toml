@@ -1,11 +1,10 @@
 [build]
-  command = "cd studio && npm install && npm run build"
-  publish = "studio/.next"
+  base = "studio"
+  command = "npm install && npm run build"
+  publish = ".next"
 
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
 
 [build.environment]
   NEXT_PUBLIC_API_URL = "https://ascendra-e3jc.onrender.com"
