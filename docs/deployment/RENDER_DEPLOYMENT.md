@@ -1,154 +1,184 @@
-# Render Deployment Guide
+# Deploy Python Backend to Render
 
-## Overview
+## What Changed
 
-This project deploys 3 services on Render:
-1. **Frontend** (Next.js) - Student chatbot + Teacher dashboard
-2. **Backend** (Rust/Axum) - API server + WebSocket handler
-3. **AI Agents** (Python/CrewAI) - Multi-agent AI system
+✅ **Vercel** - Now deploys ONLY the Next.js frontend (studio)
+✅ **Render** - Will deploy the Python FastAPI backend (ai-agents)
 
-## Quick Deploy
+## Step 1: Deploy to Render
 
-### Option 1: Using render.yaml (Recommended)
+### Option A: Using Render Dashboard (Easiest)
 
-1. Push code to GitHub
-2. Go to [Render Dashboard](https://dashboard.render.com/)
-3. Click "New" → "Blueprint"
-4. Connect your GitHub repo: `dgithinjibit/syncsenta-studio`
-5. Render will automatically detect `render.yaml` and create all 3 services
+1. **Go to Render**: https://render.com
+2. **Sign up/Login** with your GitHub account
+3. **Click "New +"** → Select "Web Service"
+4. **Connect Repository**: 
+   - Select your GitHub repo: `dgithinjibit/Ascendra`
+   - Render will detect the `render.yaml` file automatically
+5. **Configure**:
+   - **Name**: `syncsenta-ai-backend`
+   - **Root Directory**: `ai-agents`
+   - **Environment**: `Python 3`
+   - **Build Command**: `pip install -e .`
+   - **Start Command**: `python -m syncsenta_agents.main`
+6. **Add Environment Variable**:
+   - Key: `GROQ_API_KEY`
+   - Value: Your Groq API key
+7. **Click "Create Web Service"**
 
-### Option 2: Manual Service Creation
+### Option B: Using render.yaml (Automatic)
 
-#### Frontend Service
-- **Name**: syncsenta-frontend
-- **Runtime**: Node
-- **Root Directory**: `studio`
-- **Build Command**: `npm install && npm run build`
-- **Start Command**: `npm start`
-- **Environment Variables**:
-  - `NODE_ENV=production`
-  - `NEXT_PUBLIC_API_URL=<backend-url>`
-  - `NEXT_PUBLIC_WS_URL=<backend-ws-url>`
+The `ai-agents/render.yaml` file is already configured. Render will:
+- ✅ Auto-detect Python 3.11
+- ✅ Install dependencies from `pyproject.toml`
+- ✅ Start the FastAPI server on port 8001
+- ✅ Provide a public URL like: `https://syncsenta-ai-backend.onrender.com`
 
-#### Backend Service
-- **Name**: syncsenta-backend
-- **Runtime**: Rust
-- **Root Directory**: `backend`
-- **Build Command**: `cargo build --release --package syncsenta-backend`
-- **Start Command**: `./target/release/syncsenta-backend`
-- **Environment Variables**:
-  - `DATABASE_URL=<postgres-connection-string>`
-  - `REDIS_URL=<redis-connection-string>`
-  - `RUST_LOG=info`
-  - `PORT=8080`
+## Step 2: Get Your Backend URL
 
-#### AI Agents Service
-- **Name**: syncsenta-ai-agents
-- **Runtime**: Python 3.11
-- **Root Directory**: `ai-agents`
-- **Build Command**: `pip install poetry && poetry install --no-dev`
-- **Start Command**: `poetry run uvicorn src.syncsenta_agents.api:app --host 0.0.0.0 --port 8000`
-- **Environment Variables**:
-  - `OPENAI_API_KEY=<your-openai-key>`
-  - `GEMINI_API_KEY=<your-gemini-key>`
-  - `GROQ_API_KEY=<your-groq-key>`
-  - `GIKUYU_MODEL_ENDPOINT=<gikuyu-model-url>`
-
-## Database Setup
-
-### PostgreSQL
-1. Create a PostgreSQL database on Render (Free tier available)
-2. Copy the **Internal Database URL**
-3. Add to Backend service as `DATABASE_URL`
-
-### Redis
-1. Create a Redis instance on Render (Free tier available)
-2. Copy the **Internal Redis URL**
-3. Add to Backend service as `REDIS_URL`
-
-## Environment Variables
-
-### Required for Frontend
-```env
-NODE_ENV=production
-NEXT_PUBLIC_API_URL=https://syncsenta-backend.onrender.com
-NEXT_PUBLIC_WS_URL=wss://syncsenta-backend.onrender.com
+After deployment, Render will give you a URL like:
+```
+https://syncsenta-ai-backend.onrender.com
 ```
 
-### Required for Backend
-```env
-DATABASE_URL=postgresql://user:password@host:5432/syncsenta
-REDIS_URL=redis://host:6379
-RUST_LOG=info
-PORT=8080
+Copy this URL - you'll need it for the frontend.
+
+## Step 3: Update Frontend to Use Render Backend
+
+You need to update the frontend to call the Render backend instead of `localhost:8001`.
+
+### Update Environment Variable
+
+Create a `.env.local` file in the `studio/` directory:
+
+```bash
+NEXT_PUBLIC_API_URL=https://syncsenta-ai-backend.onrender.com
 ```
 
-### Required for AI Agents
-```env
-OPENAI_API_KEY=sk-...
-GEMINI_API_KEY=...
-GROQ_API_KEY=gsk_...
-GIKUYU_MODEL_ENDPOINT=https://...
+### Update Frontend Code
+
+In all teacher dashboard components, replace:
+```typescript
+// OLD
+const response = await fetch('http://localhost:8001/agents/chat', {
 ```
+
+With:
+```typescript
+// NEW
+const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'
+const response = await fetch(`${apiUrl}/agents/chat`, {
+```
+
+## Step 4: Add Environment Variable to Vercel
+
+1. Go to your Vercel project dashboard
+2. Click **Settings** → **Environment Variables**
+3. Add:
+   - **Key**: `NEXT_PUBLIC_API_URL`
+   - **Value**: `https://syncsenta-ai-backend.onrender.com` (your Render URL)
+   - **Environment**: Production, Preview, Development
+4. Click **Save**
+5. **Redeploy** your Vercel project
+
+## Step 5: Test the Setup
+
+1. **Test Backend** (Render):
+   ```bash
+   curl https://syncsenta-ai-backend.onrender.com/health
+   ```
+   Should return: `{"status": "healthy"}`
+
+2. **Test Frontend** (Vercel):
+   - Go to your Vercel URL
+   - Navigate to `/teacher`
+   - Try generating a Scheme of Work
+   - Should connect to Render backend
+
+## Architecture After Deployment
+
+```
+┌─────────────────────────────────────────────┐
+│  Vercel (Frontend)                          │
+│  https://your-app.vercel.app                │
+│                                             │
+│  - Next.js App (studio/)                    │
+│  - Teacher Dashboard                        │
+│  - Student Interface                        │
+└─────────────────┬───────────────────────────┘
+                  │
+                  │ API Calls
+                  │
+                  ▼
+┌─────────────────────────────────────────────┐
+│  Render (Backend)                           │
+│  https://syncsenta-ai-backend.onrender.com  │
+│                                             │
+│  - FastAPI Server (ai-agents/)              │
+│  - Groq AI Integration                      │
+│  - Assessment Agents                        │
+│  - Telemetry Processing                     │
+└─────────────────┬───────────────────────────┘
+                  │
+                  │ AI Requests
+                  │
+                  ▼
+┌─────────────────────────────────────────────┐
+│  Groq API                                   │
+│  https://api.groq.com                       │
+│                                             │
+│  - LLM Inference                            │
+│  - Content Generation                       │
+└─────────────────────────────────────────────┘
+```
+
+## Render Free Tier Notes
+
+⚠️ **Important**: Render's free tier:
+- ✅ Free for 750 hours/month
+- ⚠️ Spins down after 15 minutes of inactivity
+- ⚠️ First request after spin-down takes ~30 seconds (cold start)
+- ✅ Automatically wakes up on incoming requests
+
+**For production**, consider upgrading to Render's paid tier ($7/month) for:
+- No spin-down
+- Faster response times
+- Better reliability
 
 ## Troubleshooting
 
-### Backend Build Fails: "could not find Cargo.toml"
-**Solution**: Ensure `rootDir: backend` is set in render.yaml
+### Backend Not Responding
+- Check Render logs: Dashboard → Your Service → Logs
+- Verify `GROQ_API_KEY` is set correctly
+- Check if service is sleeping (free tier)
 
-### Frontend Build Fails: "Cannot find module"
-**Solution**: Ensure `rootDir: studio` is set and `package.json` exists
+### Frontend Can't Connect to Backend
+- Verify `NEXT_PUBLIC_API_URL` is set in Vercel
+- Check CORS settings in backend
+- Ensure backend URL is correct (no trailing slash)
 
-### AI Agents Fails: "ModuleNotFoundError"
-**Solution**: Ensure Poetry is installed in build command: `pip install poetry && poetry install --no-dev`
+### Cold Start Issues
+- First request after 15 min takes ~30 seconds
+- Consider upgrading to paid tier
+- Or implement a keep-alive ping
 
-### Database Connection Fails
-**Solution**: Use the **Internal Database URL** from Render, not the external one
+## Cost Summary
 
-### Services Can't Communicate
-**Solution**: Use internal Render URLs (e.g., `http://syncsenta-backend:8080`) for service-to-service communication
+- **Vercel**: Free tier (hobby plan)
+- **Render**: Free tier (750 hours/month)
+- **Groq**: Free tier (rate limited)
 
-## Health Checks
+**Total Cost**: $0/month (with limitations)
 
-After deployment, verify each service:
+**Recommended for Production**:
+- Render: $7/month (no spin-down)
+- Total: $7/month
 
-- **Frontend**: `https://syncsenta-frontend.onrender.com`
-- **Backend**: `https://syncsenta-backend.onrender.com/health`
-- **AI Agents**: `https://syncsenta-ai-agents.onrender.com/health`
+## Next Steps
 
-## Free Tier Limitations
-
-Render Free tier includes:
-- ✅ 750 hours/month per service
-- ✅ Automatic HTTPS
-- ✅ Continuous deployment from Git
-- ⚠️ Services spin down after 15 minutes of inactivity (cold starts)
-- ⚠️ 512 MB RAM per service
-- ⚠️ Shared CPU
-
-For production, upgrade to paid plans for:
-- No cold starts
-- More RAM and CPU
-- Better performance
-
-## Deployment Checklist
-
-- [ ] Push code to GitHub
-- [ ] Create PostgreSQL database on Render
-- [ ] Create Redis instance on Render
-- [ ] Set all environment variables
-- [ ] Deploy using render.yaml blueprint
-- [ ] Verify health checks for all 3 services
-- [ ] Test student chatbot interface
-- [ ] Test teacher dashboard
-- [ ] Test AI agent responses
-
-## Support
-
-If deployment fails, check:
-1. Render build logs for specific errors
-2. Ensure all environment variables are set
-3. Verify database and Redis are running
-4. Check that `render.yaml` paths are correct
-
-For more help: https://render.com/docs/troubleshooting-deploys
+1. ✅ Deploy backend to Render
+2. ✅ Get backend URL
+3. ✅ Update frontend environment variables
+4. ✅ Redeploy Vercel
+5. ✅ Test end-to-end
+6. 🎉 Your app is live!
