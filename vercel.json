@@ -5,20 +5,6 @@
     {
       "src": "studio/package.json",
       "use": "@vercel/next"
-    },
-    {
-      "src": "ai-agents/src/syncsenta_agents/api/server.py",
-      "use": "@vercel/python"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/agents/(.*)",
-      "dest": "ai-agents/src/syncsenta_agents/api/server.py"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "studio/$1"
     }
   ]
 }

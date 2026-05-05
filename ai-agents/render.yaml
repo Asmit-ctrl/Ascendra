@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: syncsenta-ai-backend
+    runtime: python
+    buildCommand: pip install -e .
+    startCommand: python -m syncsenta_agents.main
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: PORT
+        value: 8001
+    healthCheckPath: /health
