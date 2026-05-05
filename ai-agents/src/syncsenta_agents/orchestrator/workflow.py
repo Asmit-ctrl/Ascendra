@@ -82,7 +82,6 @@ class LangGraphOrchestrator:
         """Set up the workflow graph with nodes and edges."""
         # Add workflow nodes
         self.workflow.add_node("analyze_request", self._analyze_request)
-        self.workflow.add_node("route_to_agent", self._route_to_agent)
         self.workflow.add_node("execute_socratic", self._execute_socratic_agent)
         self.workflow.add_node("execute_curriculum", self._execute_curriculum_agent)
         self.workflow.add_node("execute_lesson", self._execute_lesson_agent)
@@ -283,11 +282,6 @@ If multiple agents are needed, respond with MULTI_AGENT.
         if any(k in text for k in ("kicd", "competency", "strand")):
             return RoutingDecision.CBC_CURRICULUM
         return RoutingDecision.SOCRATIC_TUTOR
-    
-    async def _route_to_agent(self, state: AgentState) -> AgentState:
-        """Route request to appropriate agent (legacy method)."""
-        # This is now handled by conditional edges
-        return state
     
     async def _execute_socratic_agent(self, state: AgentState) -> AgentState:
         """Execute Socratic Tutor agent."""
