@@ -3,9 +3,9 @@
 
 import { Suspense, useState, useEffect } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
-import TeacherDashboard from '@/components/dashboards/teacher-dashboard';
-import SchoolHeadDashboard from '@/components/dashboards/school-head-dashboard';
-import { CountyOfficerDashboard } from '@/components/dashboards/county-officer-dashboard';
+// import TeacherDashboard from '@/components/dashboards/teacher-dashboard'; // LEGACY - moved to _legacy/
+// import SchoolHeadDashboard from '@/components/dashboards/school-head-dashboard'; // LEGACY - moved to _legacy/
+// import { CountyOfficerDashboard } from '@/components/dashboards/county-officer-dashboard'; // LEGACY - moved to _legacy/
 import ParentDashboard from '@/components/dashboards/parent-dashboard';
 import SchoolAdminDashboard from '@/components/dashboards/school-admin-dashboard';
 import NationalAdminDashboard from '@/components/dashboards/national-admin-dashboard';
@@ -45,11 +45,14 @@ export default function DashboardPage() {
     const renderDashboardByRole = () => {
         switch (role) {
             case 'teacher':
-                return <TeacherDashboard />;
+                // return <TeacherDashboard />; // LEGACY - moved to _legacy/
+                return <div className="p-6"><p>Teacher Dashboard (Legacy - under maintenance). Use /teacher for new dashboard.</p></div>;
             case 'school_head':
-                return <SchoolHeadDashboard />;
+                // return <SchoolHeadDashboard />; // LEGACY - moved to _legacy/
+                return <div className="p-6"><p>School Head Dashboard (Legacy - under maintenance)</p></div>;
             case 'county_officer':
-                return <CountyOfficerDashboard />;
+                // return <CountyOfficerDashboard />; // LEGACY - moved to _legacy/
+                return <div className="p-6"><p>County Officer Dashboard (Legacy - under maintenance)</p></div>;
             case 'parent':
                 return <ParentDashboard />;
             case 'school_admin':

@@ -2,11 +2,12 @@
 
 import type { User, UserRole } from './types';
 import { cookies } from 'next/headers';
-import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
-import { app } from './firebase';
+// import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore'; // LEGACY
+// import { app } from './firebase'; // LEGACY
 
 /**
  * A Server Action to set the user's role and name in cookies and Firestore.
+ * NOTE: Firebase integration disabled - only using cookies for now
  */
 export async function signupUser(role: UserRole, formData: FormData): Promise<string> {
   const fullName = formData.get('fullName') as string;
@@ -17,14 +18,15 @@ export async function signupUser(role: UserRole, formData: FormData): Promise<st
     throw new Error("Missing required signup information.");
   }
   
-  const db = getFirestore(app);
-  await setDoc(doc(db, "users", uid), {
-    uid: uid,
-    email: email,
-    name: fullName,
-    role: role,
-    createdAt: new Date().toISOString(),
-  });
+  // LEGACY: Firebase integration disabled
+  // const db = getFirestore(app);
+  // await setDoc(doc(db, "users", uid), {
+  //   uid: uid,
+  //   email: email,
+  //   name: fullName,
+  //   role: role,
+  //   createdAt: new Date().toISOString(),
+  // });
   
   const cookieStore = cookies();
   cookieStore.set('userRole', role, { path: '/', httpOnly: true, secure: process.env.NODE_ENV === 'production' });

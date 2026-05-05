@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { app } from '@/lib/firebase'; // Ensure Firebase is initialized
+// import { app } from '@/lib/firebase'; // LEGACY - Firebase disabled
 import { Inter } from 'next/font/google';
 import { cn } from '@/lib/utils';
 import Script from 'next/script';
