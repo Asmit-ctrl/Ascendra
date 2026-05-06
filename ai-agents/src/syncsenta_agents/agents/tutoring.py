@@ -20,6 +20,7 @@ from ..core.logging import AgentLogger
 from ..reasoning.pedagogical_rules import PedagogicalRuleEngine, ScaffoldingLevel
 from ..reasoning.knowledge_tracer import NeuralSymbolicKnowledgeTracer
 from ..reasoning.misconception_detector import MisconceptionDetector
+from ..reasoning.few_shot_examples import get_few_shot_loader
 from ..db.decision_logger import get_decision_logger
 
 
@@ -84,6 +85,9 @@ class TutoringAgent:
         self.rule_engine = PedagogicalRuleEngine()
         self.knowledge_tracer = NeuralSymbolicKnowledgeTracer()
         self.misconception_detector = MisconceptionDetector()
+        
+        # Initialize few-shot example loader
+        self.few_shot_loader = get_few_shot_loader()
         
         # Initialize decision logger for teacher feedback loop
         self.decision_logger = get_decision_logger(supabase_client)
@@ -152,12 +156,14 @@ class TutoringAgent:
                     types=[m.misconception_type for m in misconceptions]
                 )
             
-            # STEP 4: Build context-aware prompt with neuro-symbolic insights
+            # STEP 4: Build context-aware prompt with neuro-symbolic insights + few-shot examples
             prompt = self._build_enhanced_prompt(
                 request=request,
                 grade=grade,
                 subject=subject,
                 language=language,
+                region=(context or {}).get("region", "universal"),
+                competency=competency,
                 rule_decision=rule_decision,
                 mastery_estimate=mastery_estimate,
                 misconceptions=misconceptions,
@@ -242,21 +248,47 @@ class TutoringAgent:
         grade: str,
         subject: str,
         language: str,
+        region: str,
+        competency: str,
         rule_decision: Any,
         mastery_estimate: Any,
         misconceptions: list,
         telemetry: Dict[str, Any]
     ) -> str:
-        """Build prompt enhanced with neuro-symbolic insights."""
+        """Build prompt enhanced with neuro-symbolic insights and few-shot examples."""
         
-        prompt_parts = [
+        prompt_parts = []
+        
+        # STEP 1: Add few-shot examples from dataset (culturally relevant)
+        few_shot_examples = self.few_shot_loader.get_examples(
+            grade=grade,
+            region=region,
+            competency=competency,
+            num_examples=2,  # 2-3 examples work best for context window
+            prefer_region=True
+        )
+        
+        if few_shot_examples:
+            examples_text = self.few_shot_loader.format_for_prompt(few_shot_examples)
+            prompt_parts.append(examples_text)
+            
+            self.logger.info(
+                "Few-shot examples loaded",
+                count=len(few_shot_examples),
+                grade=grade,
+                region=region
+            )
+        
+        # STEP 2: Add student context
+        prompt_parts.extend([
             f"Student grade: {grade}",
             f"Subject: {subject}",
+            f"Region: {region}",
             f"Preferred language: {language}",
             f"\nStudent question: {request}\n"
-        ]
+        ])
         
-        # Add pedagogical context
+        # STEP 3: Add pedagogical context
         if rule_decision.fired_rules:
             prompt_parts.append(
                 f"\nPedagogical Context:\n"
@@ -265,7 +297,7 @@ class TutoringAgent:
                 f"- Scaffolding level: {rule_decision.scaffolding_level.value}"
             )
         
-        # Add mastery context
+        # STEP 4: Add mastery context
         if mastery_estimate:
             mastery_level = (
                 "strong" if mastery_estimate.mastery_score > 0.7
@@ -277,7 +309,7 @@ class TutoringAgent:
                 f"({mastery_estimate.mastery_score:.2f})"
             )
         
-        # Add misconception context
+        # STEP 5: Add misconception context
         if misconceptions:
             prompt_parts.append("\nDetected Misconceptions:")
             for m in misconceptions:
@@ -286,7 +318,7 @@ class TutoringAgent:
                     f"  Remediation: {m.remediation_strategy}"
                 )
         
-        # Add telemetry insights
+        # STEP 6: Add telemetry insights
         if telemetry:
             prompt_parts.append("\nStudent Behavior Signals:")
             if "erasure_count" in telemetry:
@@ -296,7 +328,7 @@ class TutoringAgent:
             if "attempt_count" in telemetry:
                 prompt_parts.append(f"- Attempts: {telemetry['attempt_count']}")
         
-        # Add instruction based on scaffolding level
+        # STEP 7: Add instruction based on scaffolding level
         if rule_decision.scaffolding_level == ScaffoldingLevel.MINIMAL:
             prompt_parts.append(
                 "\nInstruction: Student is doing well. Give a brief hint or "

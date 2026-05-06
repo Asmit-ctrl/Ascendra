@@ -294,13 +294,13 @@ export function TeacherDashboard() {
       {/* Header */}
       <header className="border-b">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-bold">Teacher Dashboard</h1>
-              <p className="text-sm text-muted-foreground">Monitor students and AI agent activity</p>
+              <h1 className="text-xl sm:text-2xl font-bold">Teacher Dashboard</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground">Monitor students and AI agent activity</p>
             </div>
-            <div className="flex items-center gap-2">
-              <Badge variant={wsConnected ? 'default' : 'secondary'} className="gap-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Badge variant={wsConnected ? 'default' : 'secondary'} className="gap-1 text-xs">
                 {wsConnected ? (
                   <>
                     <CheckCircle2 className="h-3 w-3" />
@@ -313,7 +313,7 @@ export function TeacherDashboard() {
                   </>
                 )}
               </Badge>
-              <Badge variant="outline" className="gap-1">
+              <Badge variant="outline" className="gap-1 text-xs">
                 <Users className="h-3 w-3" />
                 {students.filter((s) => s.status !== 'offline').length} Active
               </Badge>
@@ -323,8 +323,8 @@ export function TeacherDashboard() {
       </header>
 
       <main className="flex-1 container mx-auto px-4 py-6">
-        <div className="grid gap-6 lg:grid-cols-4">
-          {/* Student List */}
+        <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-4">
+          {/* Student List - Full width on mobile, sidebar on desktop */}
           <div className="lg:col-span-1">
             <StudentList
               students={students}
@@ -333,14 +333,14 @@ export function TeacherDashboard() {
             />
           </div>
 
-          {/* Main Content */}
+          {/* Main Content - Full width on mobile */}
           <div className="lg:col-span-3 space-y-6">
             {selectedStudent ? (
               <>
                 {/* Student Details */}
                 <Card>
                   <CardHeader>
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                       <div className="flex items-center gap-3">
                         <Avatar className="h-12 w-12">
                           <AvatarFallback>
@@ -348,8 +348,8 @@ export function TeacherDashboard() {
                           </AvatarFallback>
                         </Avatar>
                         <div>
-                          <CardTitle>{selectedStudent.name}</CardTitle>
-                          <CardDescription>
+                          <CardTitle className="text-lg sm:text-xl">{selectedStudent.name}</CardTitle>
+                          <CardDescription className="text-xs sm:text-sm">
                             {selectedStudent.grade} • {selectedStudent.subject} • {selectedStudent.location}
                           </CardDescription>
                         </div>
@@ -360,22 +360,22 @@ export function TeacherDashboard() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                       <div className="text-center">
-                        <p className="text-2xl font-bold">{selectedStudent.progress}%</p>
+                        <p className="text-xl sm:text-2xl font-bold">{selectedStudent.progress}%</p>
                         <p className="text-xs text-muted-foreground">Progress</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-2xl font-bold">{selectedStudent.questions}</p>
+                        <p className="text-xl sm:text-2xl font-bold">{selectedStudent.questions}</p>
                         <p className="text-xs text-muted-foreground">Questions</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-2xl font-bold">{messages.length}</p>
+                        <p className="text-xl sm:text-2xl font-bold">{messages.length}</p>
                         <p className="text-xs text-muted-foreground">Messages</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-2xl font-bold">
-                          {new Date(selectedStudent.last_active).toLocaleTimeString()}
+                        <p className="text-xl sm:text-2xl font-bold">
+                          {new Date(selectedStudent.last_active).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </p>
                         <p className="text-xs text-muted-foreground">Last Active</p>
                       </div>
@@ -383,13 +383,13 @@ export function TeacherDashboard() {
                   </CardContent>
                 </Card>
 
-                {/* Tabs */}
+                {/* Tabs - Scrollable on mobile */}
                 <Tabs defaultValue="chat" className="w-full">
-                  <TabsList className="grid w-full grid-cols-4">
-                    <TabsTrigger value="chat">Chat History</TabsTrigger>
-                    <TabsTrigger value="agents">AI Agents</TabsTrigger>
-                    <TabsTrigger value="analytics">Analytics</TabsTrigger>
-                    <TabsTrigger value="magic">Magic School AI</TabsTrigger>
+                  <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto">
+                    <TabsTrigger value="chat" className="text-xs sm:text-sm py-2">Chat</TabsTrigger>
+                    <TabsTrigger value="agents" className="text-xs sm:text-sm py-2">AI Agents</TabsTrigger>
+                    <TabsTrigger value="analytics" className="text-xs sm:text-sm py-2">Analytics</TabsTrigger>
+                    <TabsTrigger value="magic" className="text-xs sm:text-sm py-2">Magic School</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="chat">
@@ -418,7 +418,7 @@ export function TeacherDashboard() {
                 <CardContent className="flex flex-col items-center justify-center py-12">
                   <Users className="h-16 w-16 text-muted-foreground mb-4" />
                   <h3 className="text-lg font-semibold mb-2">Select a Student</h3>
-                  <p className="text-sm text-muted-foreground text-center max-w-md">
+                  <p className="text-sm text-muted-foreground text-center max-w-md px-4">
                     Choose a student from the list to view their chat history, AI agent activity, and learning analytics.
                   </p>
                 </CardContent>
