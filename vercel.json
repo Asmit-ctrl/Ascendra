@@ -1,6 +1,6 @@
 {
-  "buildCommand": "npm run build",
-  "outputDirectory": ".next",
-  "installCommand": "npm install",
+  "buildCommand": "bash studio/vercel-build.sh",
+  "outputDirectory": "studio/.next",
+  "installCommand": "echo 'Skipping install - using cache'",
   "framework": "nextjs"
 }
