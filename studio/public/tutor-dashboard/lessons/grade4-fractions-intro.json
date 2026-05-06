@@ -1,0 +1,230 @@
+{
+  "metadata": {
+    "id": "grade4-fractions-intro",
+    "title": "Introduction to Fractions",
+    "subject": "Mathematics",
+    "grade": "Grade 4",
+    "topic": "Understanding Fractions",
+    "cbcStrand": "Numbers",
+    "cbcSubStrand": "Fractions",
+    "estimatedTime": 15,
+    "difficulty": "beginner",
+    "learningOutcomes": [
+      "Understand fractions as parts of a whole",
+      "Identify the numerator and denominator of a fraction",
+      "Represent fractions using visual models",
+      "Compare simple fractions"
+    ],
+    "culturalContext": "Uses Kenyan examples like chapati, mandazi, and shillings"
+  },
+  "initialNode": "intro-1",
+  "nodes": [
+    {
+      "id": "intro-1",
+      "type": "teaching",
+      "explanation": {
+        "text": "# Welcome to Fractions!\n\nImagine your mother makes a **chapati** for breakfast. She cuts it into **4 equal pieces** so you and your 3 siblings can share.\n\nEach piece is called a **fraction** of the whole chapati.\n\nWhen something is divided into equal parts, each part is a fraction of the whole.",
+        "culturalContext": "Using chapati (common Kenyan food) instead of pizza"
+      },
+      "transitions": {
+        "onNext": "teach-1"
+      }
+    },
+    {
+      "id": "teach-1",
+      "type": "teaching",
+      "explanation": {
+        "text": "# Parts of a Fraction\n\nA fraction has two numbers:\n\n- **Top number (Numerator)**: How many pieces you have\n- **Bottom number (Denominator)**: How many equal pieces the whole is divided into\n\nFor example, if you eat **1 piece** out of **4 pieces** of chapati, you ate **1/4** (one-fourth) of the chapati.\n\nLet's see this with a visual:",
+        "culturalContext": "Chapati example"
+      },
+      "widget": {
+        "type": "fraction-builder",
+        "config": {
+          "shape": "circle",
+          "maxDenominator": 8,
+          "locked": true
+        }
+      },
+      "transitions": {
+        "onNext": "eval-1"
+      }
+    },
+    {
+      "id": "eval-1",
+      "type": "micro-eval",
+      "question": {
+        "text": "Your mother cuts a mandazi into **4 equal pieces**. You eat **2 pieces**. What fraction of the mandazi did you eat?",
+        "type": "widget-based",
+        "correctAnswer": {
+          "numerator": 2,
+          "denominator": 4
+        },
+        "hints": [
+          "Remember: the bottom number is how many pieces the mandazi was cut into",
+          "The top number is how many pieces you ate",
+          "You ate 2 pieces out of 4 total pieces"
+        ],
+        "explanation": "Great! You ate 2/4 of the mandazi. This can also be written as 1/2 (one-half)."
+      },
+      "widget": {
+        "type": "fraction-builder",
+        "config": {
+          "shape": "circle",
+          "maxDenominator": 8,
+          "targetFraction": {
+            "numerator": 2,
+            "denominator": 4
+          },
+          "allowEquivalent": true
+        }
+      },
+      "knowledgeComponent": "fraction-concept",
+      "transitions": {
+        "onCorrect": "teach-2",
+        "onIncorrect": "scaffold-1"
+      }
+    },
+    {
+      "id": "scaffold-1",
+      "type": "scaffolding",
+      "explanation": {
+        "text": "Let's think about this step by step:\n\n1. The mandazi was cut into **4 equal pieces** - this is our denominator (bottom number)\n2. You ate **2 pieces** - this is our numerator (top number)\n3. So the fraction is **2/4**\n\nTry selecting the denominator first (how many pieces total), then select how many pieces were eaten.",
+        "culturalContext": "Mandazi example"
+      },
+      "scaffolding": {
+        "message": "Remember: denominator = total pieces, numerator = pieces you have"
+      },
+      "transitions": {
+        "onRetry": "eval-1"
+      }
+    },
+    {
+      "id": "teach-2",
+      "type": "teaching",
+      "explanation": {
+        "text": "# Fractions on a Number Line\n\nFractions can also be shown on a number line!\n\nImagine a number line from **0** to **1**. If we divide it into **4 equal parts**, each part represents **1/4**.\n\n- 0/4 = 0 (no parts)\n- 1/4 = one part\n- 2/4 = two parts (same as 1/2)\n- 3/4 = three parts\n- 4/4 = 1 (the whole)\n\nLet's practice finding fractions on a number line!",
+        "culturalContext": "Number line concept"
+      },
+      "transitions": {
+        "onNext": "eval-2"
+      }
+    },
+    {
+      "id": "eval-2",
+      "type": "micro-eval",
+      "question": {
+        "text": "On a number line from 0 to 1, where would you place **3/4** (three-fourths)?",
+        "type": "widget-based",
+        "correctAnswer": 0.75,
+        "hints": [
+          "3/4 means 3 out of 4 equal parts",
+          "Divide the space between 0 and 1 into 4 equal parts",
+          "Count 3 parts from 0"
+        ],
+        "explanation": "Excellent! 3/4 is three-quarters of the way from 0 to 1."
+      },
+      "widget": {
+        "type": "number-line",
+        "config": {
+          "min": 0,
+          "max": 1,
+          "step": 0.25,
+          "targetValue": 0.75,
+          "showLabels": true
+        }
+      },
+      "knowledgeComponent": "fraction-number-line",
+      "transitions": {
+        "onCorrect": "teach-3",
+        "onIncorrect": "scaffold-2"
+      }
+    },
+    {
+      "id": "scaffold-2",
+      "type": "scaffolding",
+      "explanation": {
+        "text": "Let's break this down:\n\n- The number line goes from **0 to 1**\n- We need to find **3/4** (three-fourths)\n- Divide the line into **4 equal parts**: 0, 1/4, 2/4, 3/4, 1\n- **3/4** is the third mark from 0\n\nTry dragging the marker to the third position!",
+        "culturalContext": "Number line guidance"
+      },
+      "scaffolding": {
+        "message": "Count the marks: 0, 1/4, 2/4, 3/4, 1"
+      },
+      "transitions": {
+        "onRetry": "eval-2"
+      }
+    },
+    {
+      "id": "teach-3",
+      "type": "teaching",
+      "explanation": {
+        "text": "# Comparing Fractions\n\nSometimes we need to know which fraction is bigger.\n\n**When fractions have the same denominator** (bottom number), the one with the larger numerator (top number) is bigger.\n\nFor example:\n- **3/4** is bigger than **1/4** (3 pieces vs 1 piece)\n- **5/8** is bigger than **3/8** (5 pieces vs 3 pieces)\n\nThink of it like sharing shillings: if you have 3 shillings out of 4, you have more than if you had 1 shilling out of 4!",
+        "culturalContext": "Using shillings for comparison"
+      },
+      "transitions": {
+        "onNext": "eval-3"
+      }
+    },
+    {
+      "id": "eval-3",
+      "type": "micro-eval",
+      "question": {
+        "text": "You have **3/8** of a chapati. Your friend has **5/8** of a chapati. Who has more?",
+        "type": "mcq",
+        "correctAnswer": 1,
+        "options": [
+          "You have more (3/8)",
+          "Your friend has more (5/8)",
+          "You both have the same amount"
+        ],
+        "hints": [
+          "Both fractions have the same denominator (8)",
+          "Compare the numerators: 3 and 5",
+          "Which number is bigger: 3 or 5?"
+        ],
+        "explanation": "Correct! Your friend has more because 5/8 is greater than 3/8. When denominators are the same, compare the numerators."
+      },
+      "knowledgeComponent": "fraction-comparison",
+      "transitions": {
+        "onCorrect": "summary",
+        "onIncorrect": "scaffold-3"
+      }
+    },
+    {
+      "id": "scaffold-3",
+      "type": "scaffolding",
+      "explanation": {
+        "text": "Let's think about this:\n\n- You have **3/8** (3 pieces out of 8)\n- Your friend has **5/8** (5 pieces out of 8)\n- Both chapatis were cut into **8 equal pieces**\n- Who has more pieces: 3 or 5?\n\n**5 is bigger than 3**, so your friend has more!",
+        "culturalContext": "Chapati comparison"
+      },
+      "scaffolding": {
+        "message": "When denominators are the same, just compare the numerators"
+      },
+      "transitions": {
+        "onRetry": "eval-3"
+      }
+    },
+    {
+      "id": "summary",
+      "type": "summary",
+      "summary": {
+        "text": "Congratulations! You've learned the basics of fractions!",
+        "keyTakeaways": [
+          "A fraction represents parts of a whole",
+          "The numerator (top) shows how many parts you have",
+          "The denominator (bottom) shows how many equal parts the whole is divided into",
+          "Fractions can be shown on a number line",
+          "When denominators are the same, compare numerators to see which fraction is bigger"
+        ],
+        "masteryIndicators": [
+          "You can identify numerator and denominator",
+          "You can represent fractions visually",
+          "You can place fractions on a number line",
+          "You can compare simple fractions"
+        ]
+      },
+      "transitions": {
+        "onComplete": "completed"
+      }
+    }
+  ]
+}
