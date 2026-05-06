@@ -1,10 +1,7 @@
 {
   "version": 2,
-  "name": "syncsenta",
-  "builds": [
-    {
-      "src": "studio/package.json",
-      "use": "@vercel/next"
-    }
-  ]
+  "buildCommand": "cd studio && npm install && npm run build",
+  "outputDirectory": "studio/.next",
+  "framework": "nextjs",
+  "installCommand": "cd studio && npm install"
 }
