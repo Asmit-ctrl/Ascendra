@@ -10,6 +10,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStudentSchemes } from '@/lib/scheme-v2-client';
 
+export const dynamic = 'force-dynamic'; // Mark as dynamic route
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 export async function GET(request: NextRequest) {
