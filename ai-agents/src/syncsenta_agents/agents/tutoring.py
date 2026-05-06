@@ -2,6 +2,8 @@
 
 Uses the same swappable LLMProvider abstraction as AssessmentAgent so it can
 run with Ollama in dev/prod and a deterministic stub in offline demo mode.
+
+NOW ENHANCED with neuro-symbolic reasoning for explainable, adaptive tutoring.
 """
 
 from __future__ import annotations
@@ -15,6 +17,10 @@ load_dotenv()
 
 from ..core.exceptions import AgentError
 from ..core.logging import AgentLogger
+from ..reasoning.pedagogical_rules import PedagogicalRuleEngine, ScaffoldingLevel
+from ..reasoning.knowledge_tracer import NeuralSymbolicKnowledgeTracer
+from ..reasoning.misconception_detector import MisconceptionDetector
+from ..db.decision_logger import get_decision_logger
 
 
 class LLMProvider(Protocol):
@@ -62,11 +68,25 @@ _SYSTEM_PROMPT = (
 
 
 class TutoringAgent:
-    """Subject-specific tutoring. Public surface matches the orchestrator contract."""
+    """Subject-specific tutoring with neuro-symbolic reasoning.
+    
+    Combines LLM generation with symbolic pedagogical rules for:
+    - Explainable tutoring decisions
+    - Adaptive scaffolding based on student state
+    - Misconception detection and targeted remediation
+    """
 
-    def __init__(self, llm_provider: Optional[LLMProvider] = None) -> None:
+    def __init__(self, llm_provider: Optional[LLMProvider] = None, supabase_client=None) -> None:
         self.logger = AgentLogger("tutoring_agent")
         self._llm = llm_provider
+        
+        # Initialize neuro-symbolic reasoning components
+        self.rule_engine = PedagogicalRuleEngine()
+        self.knowledge_tracer = NeuralSymbolicKnowledgeTracer()
+        self.misconception_detector = MisconceptionDetector()
+        
+        # Initialize decision logger for teacher feedback loop
+        self.decision_logger = get_decision_logger(supabase_client)
 
     def _provider(self) -> LLMProvider:
         if self._llm is None:
@@ -85,24 +105,238 @@ class TutoringAgent:
             grade = (context or {}).get("grade") or "Grade 4"
             subject = (context or {}).get("subject") or "general"
             language = (context or {}).get("language", "english")
-
-            prompt = (
-                f"Student grade: {grade}\n"
-                f"Subject: {subject}\n"
-                f"Preferred language: {language}\n\n"
-                f"Student question: {request}\n\n"
-                "Give a 3-6 sentence answer that explains the concept and, if "
-                "the question is computational, walks through the steps."
+            student_id = (context or {}).get("student_id", "unknown")
+            
+            # Extract telemetry and interaction history if available
+            telemetry = (context or {}).get("telemetry", {})
+            interaction_history = (context or {}).get("interaction_history", [])
+            competency = (context or {}).get("competency", f"{subject.upper()}.GENERAL")
+            
+            # STEP 1: Evaluate pedagogical rules
+            rule_decision = self.rule_engine.evaluate(telemetry)
+            
+            self.logger.info(
+                "Pedagogical rules evaluated",
+                fired_rules=[r.rule_id for r in rule_decision.fired_rules],
+                recommended_action=rule_decision.recommended_action,
+                confidence=rule_decision.confidence
             )
+            
+            # STEP 2: Estimate mastery (if we have history)
+            mastery_estimate = None
+            if interaction_history:
+                mastery_estimate = self.knowledge_tracer.estimate_mastery(
+                    student_id=student_id,
+                    competency=competency,
+                    interaction_history=interaction_history,
+                    telemetry=telemetry
+                )
+                
+                self.logger.info(
+                    "Mastery estimated",
+                    score=mastery_estimate.mastery_score,
+                    confidence=mastery_estimate.confidence
+                )
+            
+            # STEP 3: Detect misconceptions
+            misconceptions = self.misconception_detector.detect(
+                competency=competency,
+                interaction_history=interaction_history,
+                telemetry=telemetry
+            )
+            
+            if misconceptions:
+                self.logger.info(
+                    "Misconceptions detected",
+                    count=len(misconceptions),
+                    types=[m.misconception_type for m in misconceptions]
+                )
+            
+            # STEP 4: Build context-aware prompt with neuro-symbolic insights
+            prompt = self._build_enhanced_prompt(
+                request=request,
+                grade=grade,
+                subject=subject,
+                language=language,
+                rule_decision=rule_decision,
+                mastery_estimate=mastery_estimate,
+                misconceptions=misconceptions,
+                telemetry=telemetry
+            )
+            
+            # STEP 5: Generate response with LLM
             answer = await self._provider().generate(prompt, system=_SYSTEM_PROMPT)
+            
+            # STEP 6: Log decision for teacher feedback (self-learning loop)
+            decision_id = await self.decision_logger.log_decision(
+                decision_type="tutoring_response",
+                student_id=student_id,
+                teacher_id=(context or {}).get("teacher_id", "unknown"),
+                competency=competency,
+                grade=grade,
+                subject=subject,
+                ai_action=rule_decision.recommended_action,
+                ai_response=(answer or "").strip(),
+                context={
+                    "session_id": (context or {}).get("session_id"),
+                    "telemetry": telemetry,
+                    "interaction_history": interaction_history,
+                    "fired_rules": [
+                        {
+                            "rule_id": r.rule_id,
+                            "name": r.name,
+                            "explanation": r.explanation,
+                            "confidence": r.confidence
+                        }
+                        for r in rule_decision.fired_rules
+                    ],
+                    "scaffolding_level": rule_decision.scaffolding_level.value,
+                    "explanation": rule_decision.explanation,
+                    "examples_used": self._extract_examples(answer or ""),
+                    "language": language,
+                    "region": (context or {}).get("region")
+                }
+            )
+            
+            # STEP 7: Return response with explainability metadata
             return {
                 "agent": "tutoring",
                 "response": (answer or "").strip(),
                 "subject": subject,
                 "grade": grade,
+                "decision_id": decision_id,  # For tracking feedback
+                # Explainability metadata
+                "fired_rules": [
+                    {
+                        "rule_id": r.rule_id,
+                        "name": r.name,
+                        "explanation": r.explanation,
+                        "confidence": r.confidence
+                    }
+                    for r in rule_decision.fired_rules
+                ],
+                "recommended_action": rule_decision.recommended_action,
+                "scaffolding_level": rule_decision.scaffolding_level.value,
+                "mastery_score": mastery_estimate.mastery_score if mastery_estimate else None,
+                "mastery_confidence": mastery_estimate.confidence if mastery_estimate else None,
+                "detected_misconceptions": [
+                    {
+                        "type": m.misconception_type,
+                        "description": m.description,
+                        "confidence": m.confidence,
+                        "remediation": m.remediation_strategy
+                    }
+                    for m in misconceptions
+                ],
+                "explanation": rule_decision.explanation
             }
         except AgentError:
             raise
         except Exception as exc:  # noqa: BLE001
             self.logger.error("Tutoring task failed", error=str(exc))
             raise AgentError(f"Tutoring failure: {exc}") from exc
+    
+    def _build_enhanced_prompt(
+        self,
+        request: str,
+        grade: str,
+        subject: str,
+        language: str,
+        rule_decision: Any,
+        mastery_estimate: Any,
+        misconceptions: list,
+        telemetry: Dict[str, Any]
+    ) -> str:
+        """Build prompt enhanced with neuro-symbolic insights."""
+        
+        prompt_parts = [
+            f"Student grade: {grade}",
+            f"Subject: {subject}",
+            f"Preferred language: {language}",
+            f"\nStudent question: {request}\n"
+        ]
+        
+        # Add pedagogical context
+        if rule_decision.fired_rules:
+            prompt_parts.append(
+                f"\nPedagogical Context:\n"
+                f"- Detected student state: {rule_decision.explanation}\n"
+                f"- Recommended approach: {rule_decision.recommended_action}\n"
+                f"- Scaffolding level: {rule_decision.scaffolding_level.value}"
+            )
+        
+        # Add mastery context
+        if mastery_estimate:
+            mastery_level = (
+                "strong" if mastery_estimate.mastery_score > 0.7
+                else "developing" if mastery_estimate.mastery_score > 0.4
+                else "emerging"
+            )
+            prompt_parts.append(
+                f"- Current mastery: {mastery_level} "
+                f"({mastery_estimate.mastery_score:.2f})"
+            )
+        
+        # Add misconception context
+        if misconceptions:
+            prompt_parts.append("\nDetected Misconceptions:")
+            for m in misconceptions:
+                prompt_parts.append(
+                    f"- {m.description} (confidence: {m.confidence:.2f})\n"
+                    f"  Remediation: {m.remediation_strategy}"
+                )
+        
+        # Add telemetry insights
+        if telemetry:
+            prompt_parts.append("\nStudent Behavior Signals:")
+            if "erasure_count" in telemetry:
+                prompt_parts.append(f"- Erasures: {telemetry['erasure_count']}")
+            if "dwell_time_seconds" in telemetry:
+                prompt_parts.append(f"- Time on task: {telemetry['dwell_time_seconds']}s")
+            if "attempt_count" in telemetry:
+                prompt_parts.append(f"- Attempts: {telemetry['attempt_count']}")
+        
+        # Add instruction based on scaffolding level
+        if rule_decision.scaffolding_level == ScaffoldingLevel.MINIMAL:
+            prompt_parts.append(
+                "\nInstruction: Student is doing well. Give a brief hint or "
+                "encouraging question. Do NOT give away the answer."
+            )
+        elif rule_decision.scaffolding_level == ScaffoldingLevel.MODERATE:
+            prompt_parts.append(
+                "\nInstruction: Student needs guidance. Ask a Socratic question "
+                "that leads them toward the concept. Reference their specific actions."
+            )
+        elif rule_decision.scaffolding_level == ScaffoldingLevel.SUBSTANTIAL:
+            prompt_parts.append(
+                "\nInstruction: Student is frustrated. Break down the problem into "
+                "smaller steps. Provide conceptual explanation with examples."
+            )
+        else:
+            prompt_parts.append(
+                "\nInstruction: Give a 3-6 sentence answer that explains the concept "
+                "and walks through the steps."
+            )
+        
+        return "\n".join(prompt_parts)
+    
+    def _extract_examples(self, response: str) -> List[str]:
+        """Extract cultural examples used in the response.
+        
+        This helps track which examples work best in different contexts.
+        """
+        examples = []
+        
+        # Common Kenyan examples to track
+        kenyan_terms = [
+            "matatu", "shamba", "ugali", "shilling", "m-pesa",
+            "nairobi", "mombasa", "kisumu", "boda boda",
+            "maize", "sukuma wiki", "mandazi", "chapati"
+        ]
+        
+        response_lower = response.lower()
+        for term in kenyan_terms:
+            if term in response_lower:
+                examples.append(term)
+        
+        return examples

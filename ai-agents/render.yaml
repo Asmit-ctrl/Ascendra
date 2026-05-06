@@ -7,6 +7,30 @@ services:
     envVars:
       - key: GROQ_API_KEY
         sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: FRONTEND_URL
+        value: https://mwalimu-ai.vercel.app
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
       - key: PORT
         value: 8001
-    healthCheckPath: /health
+    healthCheckPath: /healthz
+
+  - type: cron
+    name: rule-learning-job
+    runtime: python
+    schedule: "0 2 * * *"
+    buildCommand: pip install -e .
+    startCommand: python -m syncsenta_agents.jobs.rule_learning_job
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile

@@ -64,7 +64,11 @@ app = FastAPI(title="SyncSenta AI Agents API", version="0.2.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # dev only; tighten for prod
+    allow_origins=[
+        "http://localhost:3000",  # Local development
+        "https://*.vercel.app",   # Vercel preview deployments
+        os.getenv("FRONTEND_URL", "https://mwalimu-ai.vercel.app"),  # Production
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
