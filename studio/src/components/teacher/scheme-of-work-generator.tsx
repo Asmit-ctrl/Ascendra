@@ -104,7 +104,8 @@ Format the scheme as follows:
 
 Make it detailed, practical, and ready for Kenyan teachers to use. Ensure it aligns with KICD CBC standards.`
 
-      const response = await fetch('http://localhost:8001/agents/chat', {
+      const apiUrl = process.env.NEXT_PUBLIC_AI_AGENTS_URL || 'http://localhost:8001'
+      const response = await fetch(`${apiUrl}/agents/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

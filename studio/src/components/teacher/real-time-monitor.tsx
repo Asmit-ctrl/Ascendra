@@ -53,7 +53,8 @@ export function RealTimeMonitor() {
 
   const fetchActiveStudents = async () => {
     try {
-      const response = await fetch('http://localhost:8001/dashboard/students/active')
+      const apiUrl = process.env.NEXT_PUBLIC_AI_AGENTS_URL || 'http://localhost:8001'
+      const response = await fetch(`${apiUrl}/dashboard/students/active`)
       const data = await response.json()
       setStudents(data)
     } catch (error) {

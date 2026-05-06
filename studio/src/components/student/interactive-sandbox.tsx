@@ -169,7 +169,8 @@ export function InteractiveSandbox({
     
     try {
       // Send telemetry to backend
-      const response = await fetch('http://localhost:8001/telemetry/capture', {
+      const apiUrl = process.env.NEXT_PUBLIC_AI_AGENTS_URL || 'http://localhost:8001'
+      const response = await fetch(`${apiUrl}/telemetry/capture`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

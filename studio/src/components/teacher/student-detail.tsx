@@ -33,7 +33,8 @@ export function StudentDetail({ studentId, studentName, onClose }: StudentDetail
 
   const fetchProgress = async () => {
     try {
-      const response = await fetch(`http://localhost:8001/dashboard/students/${studentId}/progress`)
+      const apiUrl = process.env.NEXT_PUBLIC_AI_AGENTS_URL || 'http://localhost:8001'
+      const response = await fetch(`${apiUrl}/dashboard/students/${studentId}/progress`)
       const data = await response.json()
       setProgress(data)
     } catch (error) {
@@ -46,7 +47,8 @@ export function StudentDetail({ studentId, studentName, onClose }: StudentDetail
     
     setSending(true)
     try {
-      await fetch('http://localhost:8001/dashboard/interventions', {
+      const apiUrl = process.env.NEXT_PUBLIC_AI_AGENTS_URL || 'http://localhost:8001'
+      await fetch(`${apiUrl}/dashboard/interventions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

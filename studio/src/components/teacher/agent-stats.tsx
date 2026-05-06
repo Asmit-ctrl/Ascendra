@@ -23,7 +23,8 @@ export function AgentStats() {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch('http://localhost:8001/dashboard/agents/stats?hours=1')
+      const apiUrl = process.env.NEXT_PUBLIC_AI_AGENTS_URL || 'http://localhost:8001'
+      const response = await fetch(`${apiUrl}/dashboard/agents/stats?hours=1`)
       const data = await response.json()
       setStats(data)
     } catch (error) {
