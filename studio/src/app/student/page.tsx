@@ -30,6 +30,13 @@ import {
 } from 'lucide-react';
 import { StudentHeader } from '@/components/layout/student-header';
 import { GamificationPanel } from '@/components/student/gamification-panel';
+import type { GamificationMode } from '@/components/student/gamification-panel';
+import {
+  GamificationModeSwitcher,
+  loadGamificationMode,
+} from '@/components/student/gamification-mode-switcher';
+import { getDemoBadges } from '@/lib/gamification/badges';
+import { getStudentId } from '@/lib/auth/student-id';
 import { CompetencyMap } from '@/components/student/competency-map';
 
 interface StudentProfile {
@@ -94,11 +101,14 @@ export default function StudentDashboardPage() {
   const [learningProgress, setLearningProgress] = useState<LearningProgress[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'gamification' | 'competency'>('overview');
+  const [gamificationMode, setGamificationMode] = useState<GamificationMode>('balanced');
 
   useEffect(() => {
     const stored = localStorage.getItem('userName') || localStorage.getItem('studentName');
     if (stored) setStudentName(stored.split(' ')[0]);
-    
+
+    setGamificationMode(loadGamificationMode());
+
     // Load personalized learning data
     loadPersonalizedData();
   }, []);
@@ -135,11 +145,10 @@ export default function StudentDashboardPage() {
   };
 
   const goToTutor = (subject?: string) => {
-    if (subject) {
-      router.push(`/student/chat/${encodeURIComponent(subject)}`);
-    } else {
-      router.push('/student/journey');
-    }
+    const target = subject
+      ? `/student/tutor-dashboard?subject=${encodeURIComponent(subject)}`
+      : '/student/tutor-dashboard';
+    router.push(target);
   };
 
   const getPersonalizedGreeting = () => {
@@ -411,7 +420,7 @@ export default function StudentDashboardPage() {
                 <CardContent className="space-y-2">
                   <Button
                     className="w-full"
-                    onClick={() => router.push('/student/chat')}
+                    onClick={() => router.push('/student/tutor-dashboard')}
                   >
                     <MessageCircle className="mr-2 h-4 w-4" />
                     Start Chat Session
@@ -420,7 +429,7 @@ export default function StudentDashboardPage() {
                   <Button
                     variant="outline"
                     className="w-full"
-                    onClick={() => router.push('/student/journey?step=subject')}
+                    onClick={() => router.push('/student/tutor-dashboard')}
                   >
                     Learning Journey
                   </Button>
@@ -449,70 +458,33 @@ export default function StudentDashboardPage() {
 
           {/* Gamification Tab */}
           {activeTab === 'gamification' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold">Your achievements</h2>
+                <p className="text-sm text-muted-foreground">
+                  Pick the style that motivates you most.
+                </p>
+              </div>
+              <GamificationModeSwitcher
+                mode={gamificationMode}
+                onChange={setGamificationMode}
+              />
+            </div>
             <GamificationPanel
+              mode={gamificationMode}
               data={{
                 points: 1250,
                 level: 5,
                 streak: 12,
-                badges: [
-                  {
-                    id: '1',
-                    name: 'First Steps',
-                    description: 'Completed your first lesson',
-                    icon: 'star',
-                    earned: true,
-                    earnedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-                    rarity: 'common',
-                  },
-                  {
-                    id: '2',
-                    name: 'Week Warrior',
-                    description: '7-day learning streak',
-                    icon: 'flame',
-                    earned: true,
-                    earnedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-                    rarity: 'rare',
-                  },
-                  {
-                    id: '3',
-                    name: 'Math Master',
-                    description: 'Mastered 10 math competencies',
-                    icon: 'trophy',
-                    earned: true,
-                    earnedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-                    rarity: 'epic',
-                  },
-                  {
-                    id: '4',
-                    name: 'Perfect Score',
-                    description: 'Got 100% on a quiz',
-                    icon: 'crown',
-                    earned: false,
-                    rarity: 'legendary',
-                  },
-                  {
-                    id: '5',
-                    name: 'Helping Hand',
-                    description: 'Helped 5 classmates',
-                    icon: 'award',
-                    earned: false,
-                    rarity: 'rare',
-                  },
-                  {
-                    id: '6',
-                    name: 'Speed Demon',
-                    description: 'Completed 10 lessons in one day',
-                    icon: 'zap',
-                    earned: false,
-                    rarity: 'epic',
-                  },
-                ],
+                badges: getDemoBadges(),
                 rank: 3,
                 totalStudents: 45,
                 pointsToNextLevel: 500,
                 currentLevelPoints: 250,
               }}
             />
+          </div>
           )}
 
           {/* Competency Map Tab */}
@@ -680,7 +652,7 @@ export default function StudentDashboardPage() {
               ]}
               onStartPractice={(competencyId) => {
                 console.log('Start practice for:', competencyId);
-                router.push(`/student/chat?competency=${competencyId}`);
+                router.push(`/student/tutor-dashboard?competency=${competencyId}`);
               }}
             />
           )}

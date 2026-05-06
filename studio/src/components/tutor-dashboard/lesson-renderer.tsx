@@ -46,18 +46,35 @@ export function LessonRenderer({
     },
   });
 
+  // matches() is loosely typed because xstate v5 infers state values as `never`
+  // when the machine doesn't declare them in setup({ types }). String compare
+  // is equivalent for our flat/nested values here.
+  const matches = (value: string): boolean => {
+    if (value.includes('.')) {
+      const [parent, child] = value.split('.');
+      return (
+        typeof state.value === 'object' &&
+        state.value !== null &&
+        (state.value as Record<string, string>)[parent] === child
+      );
+    }
+    return state.value === value;
+  };
+
   // Auto-start lesson
   useEffect(() => {
-    if (state.matches('idle')) {
+    if (matches('idle')) {
       send({ type: 'START' });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, send]);
 
   // Handle lesson completion
   useEffect(() => {
-    if (state.matches('completed')) {
+    if (matches('completed')) {
       onComplete?.(state.context.interactions);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, onComplete]);
 
   // Get current node
@@ -105,14 +122,14 @@ export function LessonRenderer({
       </Card>
 
       {/* Current Node Content */}
-      {state.matches('active.teaching') && (
+      {matches('active.teaching') && (
         <TeachingNodeRenderer
           node={currentNode as TeachingNode}
           onNext={() => send({ type: 'NEXT' })}
         />
       )}
 
-      {state.matches('active.microEval') && (
+      {matches('active.microEval') && (
         <MicroEvalNodeRenderer
           node={currentNode as MicroEvalNode}
           onCorrect={(data) => send({ type: 'ANSWER_CORRECT', data })}
@@ -122,7 +139,7 @@ export function LessonRenderer({
         />
       )}
 
-      {state.matches('active.scaffolding') && (
+      {matches('active.scaffolding') && (
         <ScaffoldingNodeRenderer
           node={currentNode as ScaffoldingNode}
           lessonScript={lessonScript}
@@ -130,14 +147,14 @@ export function LessonRenderer({
         />
       )}
 
-      {state.matches('active.summary') && (
+      {matches('active.summary') && (
         <SummaryNodeRenderer
           node={currentNode as SummaryNode}
           onComplete={() => send({ type: 'COMPLETE' })}
         />
       )}
 
-      {state.matches('completed') && (
+      {matches('completed') && (
         <LessonCompletedView
           lessonTitle={lessonScript.metadata.title}
           totalTime={Date.now() - state.context.startTime}

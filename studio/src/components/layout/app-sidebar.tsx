@@ -39,25 +39,21 @@ import { useEffect, useState } from "react";
 
 const teacherNavItems = [
     { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-    { href: "/dashboard/tools", icon: Bot, label: "Teacher Tools" },
-    { href: "/dashboard/learning-lab", icon: FlaskConical, label: "Learning Lab" },
-    { href: "/dashboard/reports", icon: Library, label: "My Library" },
     { href: "/dashboard/improvements", icon: TrendingUp, label: "Improvements" },
 ];
 
 const schoolHeadNavItems = [
     { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-    { href: "/dashboard/reports", icon: Megaphone, label: "Announcements" },
     { href: "/dashboard/school-staff", icon: Users, label: "Staff" },
     { href: "/dashboard/school-finance", icon: Wallet, label: "Finance" },
 ];
 
 const countyOfficerNavItems = [
     { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-    { href: "/dashboard/curriculum", icon: Database, label: "Curriculum" },
     { href: "/dashboard/schools", icon: School, label: "Schools" },
     { href: "/dashboard/county-teachers", icon: BookUser, label: "Teachers" },
     { href: "/dashboard/county-comms", icon: Megaphone, label: "Comms" },
+    { href: "/dashboard/county-finance", icon: Wallet, label: "Finance" },
     { href: "/dashboard/county-resources", icon: Briefcase, label: "Resources" },
 ];
 
