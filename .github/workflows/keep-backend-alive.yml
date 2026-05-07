@@ -13,5 +13,5 @@ jobs:
       - name: Ping SyncSenta Backend
         run: |
           echo "Pinging backend at $(date)"
-          curl -f https://ascendra-e3jc.onrender.com/healthz || exit 1
+          curl -f https://ascendra-1.onrender.com/healthz || exit 1
           echo "Backend is alive!"
