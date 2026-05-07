@@ -235,6 +235,10 @@ def get_subjects_for_grade(grade: str) -> List[str]:
     return _UPPER_PRIMARY_SUBJECTS
 
 
+# Alias for external use
+CURRICULUM_REGISTRY = _HARDCODED_STRANDS
+
+
 __all__ = [
     "StrandInfo", "SubStrandInfo", "SchemeRow",
     "get_hardcoded_strands", "get_sub_strands_for_strand",
