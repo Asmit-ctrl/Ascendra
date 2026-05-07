@@ -116,10 +116,21 @@ class LessonArchitectAgent:
         try:
             action = (context or {}).get("action") or self._infer_action(request)
             
+            # Normalize grade format (handle "grade-4" or "Grade 4")
+            grade = context.get("grade", "Grade 4")
+            if grade and not grade.startswith("Grade"):
+                # Convert "grade-4" to "Grade 4"
+                grade = grade.replace("grade-", "Grade ").replace("-", " ").title()
+            
+            # Normalize subject format
+            subject = context.get("subject", "Mathematics")
+            if subject:
+                subject = subject.replace("-", " ").title()
+            
             if action == "generate_scheme":
                 return await self.generate_scheme(
-                    grade=context.get("grade", "Grade 4"),
-                    subject=context.get("subject", "Mathematics"),
+                    grade=grade,
+                    subject=subject,
                     term=context.get("term", "Term 1"),
                     mode=context.get("mode", SchemeMode.STANDARD),
                     teacher_id=context.get("teacher_id", "unknown"),
@@ -184,10 +195,27 @@ class LessonArchitectAgent:
             # Validate curriculum exists
             curriculum_key = f"{grade}|{subject}"
             if curriculum_key not in CURRICULUM_REGISTRY:
-                raise AgentError(
-                    f"No curriculum data for {grade} {subject}. "
-                    f"Available: {list(CURRICULUM_REGISTRY.keys())}"
-                )
+                # Try alternative formats
+                alt_keys = [
+                    f"{grade}|{subject}",
+                    f"Grade {grade.split()[-1]}|{subject}",  # "Grade 4" from "grade-4"
+                    f"{grade.replace('Grade ', 'Grade')}|{subject}",
+                ]
+                
+                found_key = None
+                for key in alt_keys:
+                    if key in CURRICULUM_REGISTRY:
+                        found_key = key
+                        curriculum_key = key
+                        break
+                
+                if not found_key:
+                    available = list(CURRICULUM_REGISTRY.keys())[:10]
+                    raise AgentError(
+                        f"No curriculum data for '{grade}' '{subject}'. "
+                        f"Available (sample): {available}. "
+                        f"Tried keys: {alt_keys}"
+                    )
             
             # Get curriculum data
             strands = get_hardcoded_strands(grade, subject)
