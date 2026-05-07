@@ -101,7 +101,10 @@ export function MwalimuChat({
 
   useEffect(() => {
     // Connect to Python FastAPI backend WebSocket
-    const wsUrl = `ws://localhost:8001/dashboard/ws/student/${studentId}`;
+    const apiUrl = process.env.NEXT_PUBLIC_AI_AGENTS_URL || 'https://ascendra-1.onrender.com';
+    const wsProtocol = apiUrl.startsWith('https') ? 'wss' : 'ws';
+    const wsHost = apiUrl.replace(/^https?:\/\//, '');
+    const wsUrl = `${wsProtocol}://${wsHost}/dashboard/ws/student/${studentId}`;
 
     const connectWebSocket = () => {
       try {
@@ -247,7 +250,7 @@ export function MwalimuChat({
 
     try {
       // Call Python FastAPI backend
-      const apiUrl = process.env.NEXT_PUBLIC_AI_AGENTS_URL || 'http://localhost:8001'
+      const apiUrl = process.env.NEXT_PUBLIC_AI_AGENTS_URL || 'https://ascendra-1.onrender.com';
       const response = await fetch(`${apiUrl}/agents/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
