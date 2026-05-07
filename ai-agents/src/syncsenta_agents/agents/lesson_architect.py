@@ -19,7 +19,6 @@ from ..curriculum import (
     get_hardcoded_strands,
     get_lessons_per_week,
     get_sub_strands_for_strand,
-    get_strands_for_term,
     CURRICULUM_REGISTRY,
 )
 from ..curriculum.term_mappings import get_term_allocation
@@ -225,7 +224,7 @@ class LessonArchitectAgent:
             lessons_per_week = get_lessons_per_week(grade, subject)
             
             # Get term allocation
-            term_allocation = get_strands_for_term(grade, subject, term)
+            term_allocation = get_term_allocation(grade, subject, term)
             if not term_allocation:
                 raise AgentError(f"No term allocation for {grade} {subject} {term}")
             

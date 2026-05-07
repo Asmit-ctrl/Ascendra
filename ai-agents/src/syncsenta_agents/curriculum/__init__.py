@@ -240,4 +240,5 @@ __all__ = [
     "get_hardcoded_strands", "get_sub_strands_for_strand",
     "get_lessons_per_week", "get_subjects_for_grade",
     "COLUMN_HEADERS", "KISWAHILI_SUBJECTS", "GRADES",
+    "CURRICULUM_REGISTRY",
 ]
