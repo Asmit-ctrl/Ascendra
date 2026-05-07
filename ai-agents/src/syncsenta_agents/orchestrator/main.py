@@ -41,13 +41,20 @@ class SyncSentaOrchestrator:
             )
             # Tutoring_Agent — registered under "socratic_tutor" so the
             # existing workflow routing slot picks it up for student questions.
+            from ..db.supabase_client import get_supabase_client
+            try:
+                supabase = get_supabase_client()
+            except ValueError:
+                self.logger.warning("Supabase not configured - agents will run without database")
+                supabase = None
+            
             self.workflow_orchestrator.register_agent(
-                "socratic_tutor", TutoringAgent()
+                "socratic_tutor", TutoringAgent(supabase_client=supabase)
             )
             # Lesson Architect Agent — generates CBC-compliant schemes and lesson plans
             from ..agents.lesson_architect import LessonArchitectAgent
             self.workflow_orchestrator.register_agent(
-                "lesson_architect", LessonArchitectAgent()
+                "lesson_architect", LessonArchitectAgent(supabase_client=supabase)
             )
 
             self._initialized = True
