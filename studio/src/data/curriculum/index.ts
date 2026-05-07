@@ -274,3 +274,6 @@ export function getWeeklyDistribution(grade: string, subject: string): { weeks: 
     lessonsPerWeek: getLessonsPerWeek(grade, subject)
   };
 }
+
+// Re-export term allocation functions
+export { getTermAllocation, getTermLessonCount, isLowerPrimaryKiswahili } from './term-mappings';

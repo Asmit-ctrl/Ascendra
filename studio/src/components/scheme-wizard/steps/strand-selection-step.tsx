@@ -10,7 +10,6 @@ import { useSchemeWizardStore } from '@/stores/scheme-wizard-store';
 import {
   getHardcodedStrands,
   getTermAllocation,
-  getWeeklyDistribution,
   getSubjectsForGrade,
 } from '@/data/curriculum';
 import { Button } from '@/components/ui/button';
@@ -55,22 +54,13 @@ export function StrandSelectionStep() {
     if (isLanguageSubject) {
       // Weekly mode for language subjects
       setWeeklyMode(true);
-      const distribution = getWeeklyDistribution(selectedGrade, selectedSubject, selectedTerm);
+      const allocation = getTermAllocation(selectedGrade, selectedSubject, selectedTerm);
       
-      if (distribution.length > 0) {
-        // Group by strand and sub-strand
-        const strandMap = new Map<string, Set<string>>();
-        
-        distribution.forEach(d => {
-          if (!strandMap.has(d.strand)) {
-            strandMap.set(d.strand, new Set());
-          }
-          strandMap.get(d.strand)!.add(d.subStrand);
-        });
-        
-        const initialStrands: StrandSelection[] = Array.from(strandMap.entries()).map(([strand, subStrands]) => ({
-          strand,
-          subStrands: Array.from(subStrands),
+      if (allocation && allocation.length > 0) {
+        // Convert term allocation to strand selections
+        const initialStrands: StrandSelection[] = allocation.map(a => ({
+          strand: a.strandName,
+          subStrands: a.subStrands.map(ss => ss.name),
           weeks: 13, // Full term for language subjects
         }));
         
