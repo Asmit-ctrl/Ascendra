@@ -42,16 +42,16 @@ CREATE TABLE IF NOT EXISTS ai_decisions (
   
   -- Metadata
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  feedback_received_at TIMESTAMPTZ,
-  
-  -- Indexes for querying
-  INDEX idx_teacher_id (teacher_id),
-  INDEX idx_student_id (student_id),
-  INDEX idx_competency (competency),
-  INDEX idx_decision_type (decision_type),
-  INDEX idx_teacher_feedback (teacher_feedback),
-  INDEX idx_created_at (created_at)
+  feedback_received_at TIMESTAMPTZ
 );
+
+-- Indexes for ai_decisions
+CREATE INDEX IF NOT EXISTS idx_ai_decisions_teacher_id ON ai_decisions(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_ai_decisions_student_id ON ai_decisions(student_id);
+CREATE INDEX IF NOT EXISTS idx_ai_decisions_competency ON ai_decisions(competency);
+CREATE INDEX IF NOT EXISTS idx_ai_decisions_decision_type ON ai_decisions(decision_type);
+CREATE INDEX IF NOT EXISTS idx_ai_decisions_teacher_feedback ON ai_decisions(teacher_feedback);
+CREATE INDEX IF NOT EXISTS idx_ai_decisions_created_at ON ai_decisions(created_at);
 
 -- Learned Pedagogical Rules: Rules discovered from teacher feedback
 CREATE TABLE IF NOT EXISTS learned_rules (
@@ -87,13 +87,14 @@ CREATE TABLE IF NOT EXISTS learned_rules (
   
   -- Metadata
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  
-  INDEX idx_status (status),
-  INDEX idx_confidence (confidence),
-  INDEX idx_applicable_regions (applicable_regions),
-  INDEX idx_applicable_grades (applicable_grades)
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Indexes for learned_rules
+CREATE INDEX IF NOT EXISTS idx_learned_rules_status ON learned_rules(status);
+CREATE INDEX IF NOT EXISTS idx_learned_rules_confidence ON learned_rules(confidence);
+CREATE INDEX IF NOT EXISTS idx_learned_rules_applicable_regions ON learned_rules USING GIN(applicable_regions);
+CREATE INDEX IF NOT EXISTS idx_learned_rules_applicable_grades ON learned_rules USING GIN(applicable_grades);
 
 -- Cultural Context Patterns: Track what works in different contexts
 CREATE TABLE IF NOT EXISTS cultural_patterns (
@@ -122,12 +123,13 @@ CREATE TABLE IF NOT EXISTS cultural_patterns (
   
   -- Metadata
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  
-  INDEX idx_region (region),
-  INDEX idx_pattern_type (pattern_type),
-  INDEX idx_success_rate (success_rate)
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Indexes for cultural_patterns
+CREATE INDEX IF NOT EXISTS idx_cultural_patterns_region ON cultural_patterns(region);
+CREATE INDEX IF NOT EXISTS idx_cultural_patterns_pattern_type ON cultural_patterns(pattern_type);
+CREATE INDEX IF NOT EXISTS idx_cultural_patterns_success_rate ON cultural_patterns(success_rate);
 
 -- Teacher Rule Proposals: Teachers can propose new rules
 CREATE TABLE IF NOT EXISTS teacher_rule_proposals (
@@ -166,12 +168,13 @@ CREATE TABLE IF NOT EXISTS teacher_rule_proposals (
   
   -- Metadata
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  
-  INDEX idx_teacher_id (teacher_id),
-  INDEX idx_status (status),
-  INDEX idx_created_at (created_at)
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Indexes for teacher_rule_proposals
+CREATE INDEX IF NOT EXISTS idx_teacher_rule_proposals_teacher_id ON teacher_rule_proposals(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_teacher_rule_proposals_status ON teacher_rule_proposals(status);
+CREATE INDEX IF NOT EXISTS idx_teacher_rule_proposals_created_at ON teacher_rule_proposals(created_at);
 
 -- Rule Votes: Teachers vote on proposed rules
 CREATE TABLE IF NOT EXISTS rule_votes (
@@ -184,9 +187,11 @@ CREATE TABLE IF NOT EXISTS rule_votes (
   
   created_at TIMESTAMPTZ DEFAULT NOW(),
   
-  UNIQUE(proposal_id, teacher_id), -- One vote per teacher per proposal
-  INDEX idx_proposal_id (proposal_id)
+  UNIQUE(proposal_id, teacher_id) -- One vote per teacher per proposal
 );
+
+-- Indexes for rule_votes
+CREATE INDEX IF NOT EXISTS idx_rule_votes_proposal_id ON rule_votes(proposal_id);
 
 -- A/B Test Results: Track performance of new rules
 CREATE TABLE IF NOT EXISTS rule_ab_tests (
@@ -210,11 +215,12 @@ CREATE TABLE IF NOT EXISTS rule_ab_tests (
   
   -- Metadata
   started_at TIMESTAMPTZ DEFAULT NOW(),
-  ended_at TIMESTAMPTZ,
-  
-  INDEX idx_rule_id (rule_id),
-  INDEX idx_test_result (test_result)
+  ended_at TIMESTAMPTZ
 );
+
+-- Indexes for rule_ab_tests
+CREATE INDEX IF NOT EXISTS idx_rule_ab_tests_rule_id ON rule_ab_tests(rule_id);
+CREATE INDEX IF NOT EXISTS idx_rule_ab_tests_test_result ON rule_ab_tests(test_result);
 
 -- Row Level Security Policies
 
@@ -224,14 +230,14 @@ ALTER TABLE ai_decisions ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Teachers can view their students' AI decisions"
   ON ai_decisions FOR SELECT
   USING (
-    auth.uid() = teacher_id
+    auth.uid()::uuid = teacher_id
     OR auth.jwt() ->> 'role' = 'admin'
   );
 
 CREATE POLICY "Teachers can update feedback on their decisions"
   ON ai_decisions FOR UPDATE
-  USING (auth.uid() = teacher_id)
-  WITH CHECK (auth.uid() = teacher_id);
+  USING (auth.uid()::uuid = teacher_id)
+  WITH CHECK (auth.uid()::uuid = teacher_id);
 
 -- Teachers can propose rules
 ALTER TABLE teacher_rule_proposals ENABLE ROW LEVEL SECURITY;
@@ -242,12 +248,12 @@ CREATE POLICY "Teachers can view all proposals"
 
 CREATE POLICY "Teachers can create proposals"
   ON teacher_rule_proposals FOR INSERT
-  WITH CHECK (auth.uid() = teacher_id);
+  WITH CHECK (auth.uid()::uuid = teacher_id);
 
 CREATE POLICY "Teachers can update their own proposals"
   ON teacher_rule_proposals FOR UPDATE
-  USING (auth.uid() = teacher_id)
-  WITH CHECK (auth.uid() = teacher_id);
+  USING (auth.uid()::uuid = teacher_id)
+  WITH CHECK (auth.uid()::uuid = teacher_id);
 
 -- Teachers can vote on proposals
 ALTER TABLE rule_votes ENABLE ROW LEVEL SECURITY;
@@ -258,7 +264,7 @@ CREATE POLICY "Teachers can view all votes"
 
 CREATE POLICY "Teachers can create votes"
   ON rule_votes FOR INSERT
-  WITH CHECK (auth.uid() = teacher_id);
+  WITH CHECK (auth.uid()::uuid = teacher_id);
 
 -- Learned rules are public (read-only for teachers)
 ALTER TABLE learned_rules ENABLE ROW LEVEL SECURITY;
