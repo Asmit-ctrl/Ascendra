@@ -33,8 +33,8 @@ class SyncSentaOrchestrator:
             # Initialize LangGraph workflow
             self.workflow_orchestrator = LangGraphOrchestrator()
 
-            # Register implemented worker agents. Other agents (Socratic, CBC,
-            # Lesson, Intelligence, Career) fall through to placeholder
+            # Register implemented worker agents. Other agents (CBC,
+            # Intelligence, Career) fall through to placeholder
             # responses in the workflow until their migration completes.
             self.workflow_orchestrator.register_agent(
                 "assessment", AssessmentAgent()
@@ -43,6 +43,11 @@ class SyncSentaOrchestrator:
             # existing workflow routing slot picks it up for student questions.
             self.workflow_orchestrator.register_agent(
                 "socratic_tutor", TutoringAgent()
+            )
+            # Lesson Architect Agent — generates CBC-compliant schemes and lesson plans
+            from ..agents.lesson_architect import LessonArchitectAgent
+            self.workflow_orchestrator.register_agent(
+                "lesson_architect", LessonArchitectAgent()
             )
 
             self._initialized = True

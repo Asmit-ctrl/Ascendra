@@ -357,7 +357,7 @@ If multiple agents are needed, respond with MULTI_AGENT.
                 state["agent_responses"]["lesson_architect"] = response
             else:
                 state["agent_responses"]["lesson_architect"] = {
-                    "response": "Lesson Architect agent not yet implemented",
+                    "response": "Lesson Architect agent not registered. Please register the agent in main.py",
                     "agent": "lesson_architect"
                 }
             
