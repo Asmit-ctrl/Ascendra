@@ -2,7 +2,8 @@
 
 import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
-import { ArrowRight } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ArrowRight, GraduationCap, Users, BarChart3 } from "lucide-react";
 import Link from "next/link";
 import Image from 'next/image';
 
@@ -54,6 +55,127 @@ export default function HomePage() {
                             View Products
                         </Link>
                     </Button>
+                </div>
+            </div>
+
+            <div className="mt-24 mb-12">
+                <h2 className="text-3xl font-bold text-center mb-12">What You Get</h2>
+                <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+                    
+                    <Card className="border-2 hover:border-primary transition-colors">
+                        <CardHeader>
+                            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                                <GraduationCap className="w-6 h-6 text-primary" />
+                            </div>
+                            <CardTitle>Students</CardTitle>
+                            <CardDescription>Personalized learning experience</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <ul className="space-y-3 text-sm text-muted-foreground">
+                                <li className="flex items-start">
+                                    <span className="mr-2">•</span>
+                                    <span>Automatic attendance via face recognition</span>
+                                </li>
+                                <li className="flex items-start">
+                                    <span className="mr-2">•</span>
+                                    <span>AI-generated personalized exams adapted to your level</span>
+                                </li>
+                                <li className="flex items-start">
+                                    <span className="mr-2">•</span>
+                                    <span>Instant code grading with detailed feedback</span>
+                                </li>
+                                <li className="flex items-start">
+                                    <span className="mr-2">•</span>
+                                    <span>Real-time progress tracking and learning recommendations</span>
+                                </li>
+                                <li className="flex items-start">
+                                    <span className="mr-2">•</span>
+                                    <span>24/7 AI chatbot for questions and support</span>
+                                </li>
+                                <li className="flex items-start">
+                                    <span className="mr-2">•</span>
+                                    <span>Curriculum-aligned Arduino projects and assessments</span>
+                                </li>
+                            </ul>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="border-2 hover:border-primary transition-colors">
+                        <CardHeader>
+                            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                                <Users className="w-6 h-6 text-primary" />
+                            </div>
+                            <CardTitle>Teachers</CardTitle>
+                            <CardDescription>Focus on mentoring, not administration</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <ul className="space-y-3 text-sm text-muted-foreground">
+                                <li className="flex items-start">
+                                    <span className="mr-2">•</span>
+                                    <span>Automated attendance tracking with no manual input</span>
+                                </li>
+                                <li className="flex items-start">
+                                    <span className="mr-2">•</span>
+                                    <span>AI-powered exam generation and grading</span>
+                                </li>
+                                <li className="flex items-start">
+                                    <span className="mr-2">•</span>
+                                    <span>Automatic code assessment and feedback delivery</span>
+                                </li>
+                                <li className="flex items-start">
+                                    <span className="mr-2">•</span>
+                                    <span>Real-time alerts for struggling students</span>
+                                </li>
+                                <li className="flex items-start">
+                                    <span className="mr-2">•</span>
+                                    <span>Data-driven insights on class performance</span>
+                                </li>
+                                <li className="flex items-start">
+                                    <span className="mr-2">•</span>
+                                    <span>More time for personalized student mentoring</span>
+                                </li>
+                            </ul>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="border-2 hover:border-primary transition-colors">
+                        <CardHeader>
+                            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                                <BarChart3 className="w-6 h-6 text-primary" />
+                            </div>
+                            <CardTitle>School Heads</CardTitle>
+                            <CardDescription>Comprehensive oversight and analytics</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <ul className="space-y-3 text-sm text-muted-foreground">
+                                <li className="flex items-start">
+                                    <span className="mr-2">•</span>
+                                    <span>Real-time monitoring of all classes and students</span>
+                                </li>
+                                <li className="flex items-start">
+                                    <span className="mr-2">•</span>
+                                    <span>School-wide performance analytics and trends</span>
+                                </li>
+                                <li className="flex items-start">
+                                    <span className="mr-2">•</span>
+                                    <span>Automated attendance and assessment reports</span>
+                                </li>
+                                <li className="flex items-start">
+                                    <span className="mr-2">•</span>
+                                    <span>Teacher effectiveness metrics and insights</span>
+                                </li>
+                                <li className="flex items-start">
+                                    <span className="mr-2">•</span>
+                                    <span>Remote access to all system data via cloud dashboard</span>
+                                </li>
+                                <li className="flex items-start">
+                                    <span className="mr-2">•</span>
+                                    <span>Predictive analytics for student success and intervention</span>
+                                </li>
+                            </ul>
+                        </CardContent>
+                    </Card>
+
                 </div>
             </div>
         </div>
