@@ -420,7 +420,7 @@ export default function StudentDashboardPage() {
                 <CardContent className="space-y-2">
                   <Button
                     className="w-full"
-                    onClick={() => router.push('/student/tutor-dashboard')}
+                    onClick={() => router.push('/student/journey')}
                   >
                     <MessageCircle className="mr-2 h-4 w-4" />
                     Start Chat Session
@@ -429,7 +429,7 @@ export default function StudentDashboardPage() {
                   <Button
                     variant="outline"
                     className="w-full"
-                    onClick={() => router.push('/student/tutor-dashboard')}
+                    onClick={() => router.push('/student/journey')}
                   >
                     Learning Journey
                   </Button>
