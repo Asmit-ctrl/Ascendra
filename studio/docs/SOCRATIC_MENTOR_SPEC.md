@@ -229,11 +229,34 @@ extracts the complete tokens.
 - `scripts/socratic-smoke.ts` — live three-turn smoke against the dev
   server.
 
+### Voice I/O (Web Speech API, browser-only)
+
+`src/hooks/use-web-speech.ts` wraps `window.speechSynthesis` (TTS) and
+`window.SpeechRecognition` / `webkitSpeechRecognition` (STT). The hook is
+SSR-safe and exposes `ttsSupported` / `sttSupported` so controls hide
+entirely on unsupported browsers (Firefox lacks STT).
+
+Behaviour in `SocraticChat`:
+- **TTS** — header toggle ("Speaking" / "Mute"). Persisted preference in
+  `localStorage` under `socraticChat.speak`. **Default off** — surprise
+  audio is rude. When on, the most recent *completed* assistant message
+  is spoken once (we don't re-speak on re-renders, and we don't speak
+  token-by-token).
+- **STT** — mic button next to Send. Single-utterance mode, 12 s timeout.
+  Interim transcript shown live above the input as the student speaks.
+  Final transcript appends to whatever's already in the textbox so the
+  student can edit before sending.
+- **Locale** — `kiswahili` → `sw-KE`; `english` / `mixed` → `en-KE`,
+  with fallback to the base language code when no Kenyan voice is
+  installed on the OS.
+- **`[CHOICE: …]` is stripped** from text before TTS so the synth doesn't
+  literally read "open bracket CHOICE colon…" aloud.
+
 ## 9. Open follow-ups (still out of scope)
 
-- TTS (Web Speech API browser-side, or a server route calling a Groq /
-  ElevenLabs voice model).
-- Voice input (Web Speech API recognition).
+- Higher-quality TTS via a server-side model (Groq / ElevenLabs) for
+  prosody and Swahili voice quality. Browser TTS is fine as MVP but the
+  voices are robotic.
 - Server-side persistence (DB) — needed before multi-device sync.
 - Real distributed rate-limiting (Upstash / Vercel KV).
 - Migrating the teacher-side AI generators

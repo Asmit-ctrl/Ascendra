@@ -16,12 +16,14 @@
  *   - Persist history per (studentId, subject) in localStorage via
  *     lib/socratic-history.ts. Provides a "New conversation" reset.
  *   - Allow the student to STOP a streaming response mid-flight.
+ *   - Speak completed assistant turns aloud via Web Speech TTS (toggleable).
+ *   - Accept voice input via Web Speech STT (mic button next to Send).
  *   - Surface backend errors visibly (no silent fallbacks).
  *
- * Intentional non-goals (v1):
- *   - No TTS, no voice input.
+ * Intentional non-goals:
  *   - No WebSocket / teacher intervention pipe (those live in mwalimu-chat.tsx).
  *   - No multi-device sync. Clearing browser storage wipes history.
+ *   - No streaming TTS — we speak the final message, not token-by-token.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -29,9 +31,12 @@ import {
   Brain,
   Send,
   AlertCircle,
-  Loader2,
   Square,
   RotateCcw,
+  Mic,
+  MicOff,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -44,6 +49,7 @@ import {
   clearHistory,
   type StoredChatMessage,
 } from '@/lib/socratic-history';
+import { useWebSpeech } from '@/hooks/use-web-speech';
 
 export type ChatLanguage = 'english' | 'kiswahili' | 'mixed';
 
@@ -144,6 +150,40 @@ export function SocraticChat({
   // placeholder intro.
   const hydratedRef = useRef(false);
 
+  // ---- Voice I/O ---------------------------------------------------------
+  const speech = useWebSpeech({ language });
+
+  // Persisted toggle so the student's "speak responses" preference survives
+  // page reloads. Defaults OFF — surprise audio is rude.
+  const [speakEnabled, setSpeakEnabled] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setSpeakEnabled(window.localStorage.getItem('socraticChat.speak') === '1');
+  }, []);
+  const toggleSpeak = useCallback(() => {
+    setSpeakEnabled((prev) => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('socraticChat.speak', next ? '1' : '0');
+      }
+      if (!next) speech.cancelSpeak();
+      return next;
+    });
+  }, [speech]);
+
+  // Track the last message we spoke so we don't re-speak on every render.
+  const lastSpokenIdRef = useRef<string | null>(null);
+
+  // Append final STT transcript into the input textbox, then clear it from
+  // the hook so we don't double-apply it.
+  useEffect(() => {
+    if (!speech.finalTranscript) return;
+    setInput((prev) =>
+      prev ? `${prev} ${speech.finalTranscript}`.trim() : speech.finalTranscript.trim()
+    );
+    speech.clearFinalTranscript();
+  }, [speech.finalTranscript, speech]);
+
   // ---- Hydrate from localStorage on mount or when key fields change -------
   useEffect(() => {
     hydratedRef.current = false;
@@ -176,6 +216,22 @@ export function SocraticChat({
 
     saveHistory(studentId, subject, persistable);
   }, [messages, studentId, subject]);
+
+  // ---- Auto-speak the latest completed assistant message ------------------
+  // Trigger conditions: speakEnabled, TTS supported, message has finished
+  // streaming, and we haven't already spoken this exact message id.
+  useEffect(() => {
+    if (!speakEnabled || !speech.ttsSupported) return;
+    const last = messages[messages.length - 1];
+    if (!last) return;
+    if (last.role !== 'assistant') return;
+    if (last.streaming) return;
+    if (last.id === 'intro') return; // don't auto-greet aloud
+    if (lastSpokenIdRef.current === last.id) return;
+    if (!last.content || last.content.startsWith('⚠️')) return;
+    lastSpokenIdRef.current = last.id;
+    speech.speak(last.content);
+  }, [messages, speakEnabled, speech]);
 
   // ---- Auto-scroll on new content -----------------------------------------
   useEffect(() => {
@@ -431,7 +487,29 @@ export function SocraticChat({
 
   return (
     <Card className="h-full flex flex-col overflow-hidden">
-      <div className="flex items-center justify-end border-b px-3 py-1.5 text-xs">
+      <div className="flex items-center justify-end gap-1 border-b px-3 py-1.5 text-xs">
+        {speech.ttsSupported && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={toggleSpeak}
+            className="gap-1.5 h-7"
+            aria-pressed={speakEnabled}
+            aria-label={
+              speakEnabled
+                ? 'Mute Mwalimu (currently speaking responses)'
+                : 'Have Mwalimu speak responses aloud'
+            }
+            title={speakEnabled ? 'Mute responses' : 'Speak responses aloud'}
+          >
+            {speakEnabled ? (
+              <Volume2 className="h-3.5 w-3.5" />
+            ) : (
+              <VolumeX className="h-3.5 w-3.5" />
+            )}
+            {speakEnabled ? 'Speaking' : 'Mute'}
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="sm"
@@ -465,36 +543,77 @@ export function SocraticChat({
         </div>
       )}
 
-      <div className="border-t p-3 flex gap-2 bg-background">
-        <Textarea
-          ref={textareaRef}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={`Ask Mwalimu about ${subject}...`}
-          rows={2}
-          className="resize-none min-h-[2.5rem]"
-          disabled={busy}
-        />
-        {busy ? (
-          <Button
-            onClick={stopStreaming}
-            variant="destructive"
-            className="self-end"
-            aria-label="Stop generating"
-          >
-            <Square className="h-4 w-4" />
-          </Button>
-        ) : (
-          <Button
-            onClick={() => send(input)}
-            disabled={!input.trim()}
-            className="self-end"
-            aria-label="Send message"
-          >
-            <Send className="h-4 w-4" />
-          </Button>
+      <div className="border-t bg-background">
+        {speech.listening && (
+          <div className="px-3 pt-2 text-xs text-muted-foreground flex items-center gap-2">
+            <span className="inline-block h-2 w-2 rounded-full bg-destructive animate-pulse" />
+            Listening… {speech.interimTranscript && (
+              <span className="italic text-foreground/70 truncate">
+                "{speech.interimTranscript}"
+              </span>
+            )}
+          </div>
         )}
+        {speech.sttError && (
+          <div className="px-3 pt-2 text-xs text-destructive flex items-center gap-1">
+            <AlertCircle className="h-3 w-3" />
+            {speech.sttError}
+          </div>
+        )}
+        <div className="p-3 flex gap-2 items-end">
+          <Textarea
+            ref={textareaRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={
+              speech.listening
+                ? 'Listening…'
+                : `Ask Mwalimu about ${subject}...`
+            }
+            rows={2}
+            className="resize-none min-h-[2.5rem]"
+            disabled={busy}
+          />
+          {speech.sttSupported && (
+            <Button
+              variant={speech.listening ? 'destructive' : 'outline'}
+              size="icon"
+              onClick={() =>
+                speech.listening ? speech.stopListening() : speech.startListening()
+              }
+              disabled={busy}
+              aria-pressed={speech.listening}
+              aria-label={speech.listening ? 'Stop listening' : 'Start voice input'}
+              title={speech.listening ? 'Stop listening' : 'Speak instead of typing'}
+            >
+              {speech.listening ? (
+                <MicOff className="h-4 w-4" />
+              ) : (
+                <Mic className="h-4 w-4" />
+              )}
+            </Button>
+          )}
+          {busy ? (
+            <Button
+              onClick={stopStreaming}
+              variant="destructive"
+              size="icon"
+              aria-label="Stop generating"
+            >
+              <Square className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button
+              onClick={() => send(input)}
+              disabled={!input.trim()}
+              size="icon"
+              aria-label="Send message"
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
     </Card>
   );
