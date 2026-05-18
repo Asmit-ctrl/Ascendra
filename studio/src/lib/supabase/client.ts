@@ -20,7 +20,7 @@ export function getSupabaseClient() {
 
   if (!supabaseUrl || !supabaseAnonKey) {
     // During build time, use placeholder values to allow build to complete
-    // At runtime, this will be caught by the auth check
+    // At runtime in browser, this will be caught by the auth check
     if (typeof window === 'undefined') {
       console.warn('⚠️ Supabase env vars not set. Using placeholder for build.');
       client = createBrowserClient<Database>(
@@ -40,17 +40,6 @@ export function getSupabaseClient() {
   return client;
 }
 
-// Lazy initialization - only create client when actually used
-let supabase: ReturnType<typeof createBrowserClient<Database>>;
+// Export singleton instance
+export const supabase = getSupabaseClient();
 
-export { supabase };
-
-// Initialize on first access
-Object.defineProperty(exports, 'supabase', {
-  get() {
-    if (!supabase) {
-      supabase = getSupabaseClient();
-    }
-    return supabase;
-  },
-});

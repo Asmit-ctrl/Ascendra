@@ -203,7 +203,7 @@ RETURNS TABLE (
   current_streak INTEGER,
   competencies_mastered BIGINT,
   average_mastery_percentage INTEGER
-) AS $$
+) AS $$$
 BEGIN
   RETURN QUERY
   SELECT
@@ -240,7 +240,7 @@ RETURNS TABLE (
   session_id UUID,
   competency_code TEXT,
   created_at TIMESTAMPTZ
-) AS $$
+) AS $$$
 BEGIN
   RETURN QUERY
   SELECT
@@ -283,7 +283,7 @@ RETURNS TABLE (
   total_messages_today BIGINT,
   struggling_students BIGINT,
   excelling_students BIGINT
-) AS $$
+) AS $$$
 BEGIN
   RETURN QUERY
   SELECT
@@ -338,7 +338,7 @@ CREATE OR REPLACE FUNCTION create_student_alert(
   p_competency_code TEXT DEFAULT NULL,
   p_metadata JSONB DEFAULT NULL
 )
-RETURNS UUID AS $$
+RETURNS UUID AS $$$
 DECLARE
   v_alert_id UUID;
 BEGIN

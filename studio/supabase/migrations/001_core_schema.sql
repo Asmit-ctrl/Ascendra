@@ -453,12 +453,12 @@ CREATE POLICY "Users can view own quotas"
 
 -- Function: Update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $
+RETURNS TRIGGER AS $$
 BEGIN
   NEW.updated_at = NOW();
   RETURN NEW;
 END;
-$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql;
 
 -- Triggers for updated_at
 CREATE TRIGGER update_profiles_updated_at
@@ -478,7 +478,7 @@ CREATE TRIGGER update_daily_quotas_updated_at
 
 -- Function: Check daily quota
 CREATE OR REPLACE FUNCTION check_daily_quota(p_user_id UUID)
-RETURNS BOOLEAN AS $
+RETURNS BOOLEAN AS $$
 DECLARE
   v_messages_used INTEGER;
   v_messages_limit INTEGER;
@@ -506,11 +506,11 @@ BEGIN
   
   RETURN v_messages_used < v_messages_limit;
 END;
-$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Function: Increment daily quota
 CREATE OR REPLACE FUNCTION increment_daily_quota(p_user_id UUID)
-RETURNS VOID AS $
+RETURNS VOID AS $$
 BEGIN
   INSERT INTO daily_quotas (user_id, quota_date, messages_used, messages_limit)
   VALUES (p_user_id, CURRENT_DATE, 1, 50)
@@ -519,7 +519,7 @@ BEGIN
     messages_used = daily_quotas.messages_used + 1,
     updated_at = NOW();
 END;
-$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Function: Get user stats
 CREATE OR REPLACE FUNCTION get_user_stats(p_user_id UUID)
@@ -530,7 +530,7 @@ RETURNS TABLE (
   current_streak INTEGER,
   competencies_mastered BIGINT,
   achievements_earned BIGINT
-) AS $
+) AS $$
 BEGIN
   RETURN QUERY
   SELECT
@@ -541,13 +541,13 @@ BEGIN
     (SELECT COUNT(*) FROM learning_progress WHERE user_id = p_user_id AND mastery_level = 'mastered')::BIGINT,
     (SELECT COUNT(*) FROM achievements WHERE user_id = p_user_id)::BIGINT;
 END;
-$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- VERIFICATION
 -- ═══════════════════════════════════════════════════════════════════════════
 
-DO $
+DO $$
 DECLARE
   table_count INTEGER;
 BEGIN
@@ -566,4 +566,4 @@ BEGIN
     );
   
   RAISE NOTICE '✅ Created % core tables for Mwalimu AI', table_count;
-END $;
+END $$;
