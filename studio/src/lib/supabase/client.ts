@@ -19,6 +19,17 @@ export function getSupabaseClient() {
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
+    // During build time, use placeholder values to allow build to complete
+    // At runtime, this will be caught by the auth check
+    if (typeof window === 'undefined') {
+      console.warn('⚠️ Supabase env vars not set. Using placeholder for build.');
+      client = createBrowserClient<Database>(
+        'https://placeholder.supabase.co',
+        'placeholder-anon-key'
+      );
+      return client;
+    }
+    
     throw new Error(
       'Missing Supabase environment variables. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY'
     );
@@ -29,5 +40,17 @@ export function getSupabaseClient() {
   return client;
 }
 
-// Convenience export
-export const supabase = getSupabaseClient();
+// Lazy initialization - only create client when actually used
+let supabase: ReturnType<typeof createBrowserClient<Database>>;
+
+export { supabase };
+
+// Initialize on first access
+Object.defineProperty(exports, 'supabase', {
+  get() {
+    if (!supabase) {
+      supabase = getSupabaseClient();
+    }
+    return supabase;
+  },
+});
