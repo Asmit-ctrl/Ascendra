@@ -13,18 +13,14 @@ logger = get_logger("lesson_architect_api")
 
 class SchemeRequest(BaseModel):
     """Request to save a generated scheme."""
-    scheme_id: str
-    title: str
+    teacher_id: str
     grade: str
     subject: str
     term: str
+    title: str
+    content: str  # The generated scheme text
     mode: str = "standard"
-    teacher_id: str
     language: str = "english"
-    total_weeks: int
-    lessons_per_week: int
-    rows: List[Dict[str, Any]]
-    created_at: str
 
 
 class ListSchemesRequest(BaseModel):
@@ -46,10 +42,17 @@ async def save_scheme(request: SchemeRequest) -> Dict[str, Any]:
         )
     
     try:
-        logger.info("Saving scheme", scheme_id=request.scheme_id, teacher_id=request.teacher_id)
+        from datetime import datetime
+        import uuid
         
+        scheme_id = f"scheme_{uuid.uuid4().hex[:12]}"
+        created_at = datetime.utcnow().isoformat()
+        
+        logger.info("Saving scheme", scheme_id=scheme_id, teacher_id=request.teacher_id)
+        
+        # Store the scheme with the content as a single row
         response = supabase.table("schemes").insert({
-            "scheme_id": request.scheme_id,
+            "scheme_id": scheme_id,
             "title": request.title,
             "grade": request.grade,
             "subject": request.subject,
@@ -57,18 +60,18 @@ async def save_scheme(request: SchemeRequest) -> Dict[str, Any]:
             "mode": request.mode,
             "teacher_id": request.teacher_id,
             "language": request.language,
-            "total_weeks": request.total_weeks,
-            "lessons_per_week": request.lessons_per_week,
-            "rows": request.rows,
-            "created_at": request.created_at,
+            "total_weeks": 13,  # Standard CBC term
+            "lessons_per_week": 5,  # Standard school week
+            "rows": [{"content": request.content}],  # Store as JSONB
+            "created_at": created_at,
         }).execute()
         
-        logger.info("Scheme saved successfully", scheme_id=request.scheme_id)
+        logger.info("Scheme saved successfully", scheme_id=scheme_id)
         
         return {
             "success": True,
             "message": "Scheme saved successfully",
-            "scheme_id": request.scheme_id
+            "scheme_id": scheme_id
         }
         
     except Exception as exc:
