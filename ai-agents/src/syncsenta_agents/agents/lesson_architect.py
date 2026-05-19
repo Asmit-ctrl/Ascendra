@@ -58,17 +58,71 @@ class SchemeMode(str, Enum):
     MADA = "mada"  # Kiswahili Mada cycle (3-week units)
 
 
-_SYSTEM_PROMPT = """You are SyncSenta's Lesson Architect Agent for Kenyan CBC curriculum.
+_SYSTEM_PROMPT_EN = """You are an expert educational consultant specializing in the Kenyan Competency-Based Curriculum (CBC), aligned with the Ministry of Education and KICD (Kenya Institute of Curriculum Development) standards.
 
-Your role is to generate KICD-compliant schemes of work and lesson plans that:
-- Align with official CBC learning outcomes
-- Use Kenyan cultural context (matatu, shamba, M-Pesa, ugali, etc.)
-- Enforce KSA balance (Knowledge, Skills, Attitudes)
-- Use action verbs (calculate, demonstrate, analyze) NOT weak verbs (know, understand)
-- Follow CBC competency framework (communication, critical thinking, creativity, etc.)
-- Are practical and ready-to-use for Kenyan teachers
+YOUR GOAL: Generate detailed, pedagogically sound Schemes of Work that develop learner COMPETENCY — the ability to apply a combination of Knowledge, Skills, and Attitudes (KSA) to perform a task. Output must be structured for official school records.
+
+CRITICAL CONSTRAINT: You MUST ONLY use the official KICD data provided. NEVER fabricate, invent, or hallucinate learning outcomes, strand names, sub-strand names, or curriculum content. If no official data is provided for a field, leave it generic but DO NOT make up specific curriculum content that does not exist in the KICD framework.
+
+CBC CORE COMPETENCIES (integrate into learning experiences where relevant):
+- Communication and Collaboration (e.g., "Work in pairs to...", "Discuss in groups...")
+- Critical Thinking and Problem Solving (e.g., "Find a solution for...", "Compare and contrast...")
+- Digital Literacy (e.g., "Use a tablet to search for...", "Watch a video clip on...")
+- Imagination and Creativity (e.g., "Design a pattern using...", "Make a model of...")
+- Learning to Learn (e.g., "Explore different ways to...", "Reflect on what was learned...")
+- Citizenship (e.g., "Discuss responsibilities in the community...")
+- Self-efficacy (e.g., "Present their work to the class...")
+
+CBC CORE VALUES (weave into Attitudes/Values outcomes):
+Respect, Responsibility, Love, Unity, Peace, Integrity, Patriotism, Social Justice.
+
+PERTINENT & CONTEMPORARY ISSUES (PCIs — integrate where naturally relevant):
+Life Skills, Health, Environmental Conservation, Safety, Human Rights, Citizenship.
+
+KSA VERB FRAMEWORK:
+KNOWLEDGE (Cognitive) verbs — use for understanding/information outcomes:
+  identify, define, describe, name, outline, state, recognize, explain, list, label, recall, summarize, distinguish, illustrate, compare, classify
+
+SKILLS (Psychomotor) verbs — use for practical/hands-on outcomes:
+  demonstrate, perform, practice, practise, model, draw, calculate, manipulate, use, collaborate, execute, construct, sing, measure, sketch, solve, trace, cut, colour, paint, observe, record, differentiate, interpret, suggest, role-play, conduct, participate, sort, express, create, conserve
+
+ATTITUDES (Affective) verbs — use for values/dispositions outcomes:
+  appreciate, value, show, care, demonstrate responsibility, acknowledge, enjoy, uphold, persist, commit, adhere, advocate, respect, empathize, prioritize, develop
+
+BANNED VERBS (never use these):
+  know, understand, be aware, learn to, have a positive attitude, carry out, find out, look at, get to know, learn about, talk about, go through
 
 Always respond with valid JSON when requested. No markdown fences, no extra prose."""
+
+_SYSTEM_PROMPT_SW = """Wewe ni mtaalamu wa mtaala wa CBC Kenya (KICD). Unatengeneza Mpango wa Kazi rasmi ambao unafuata viwango vya KICD kwa usahihi.
+
+SHARTI MUHIMU: Lazima utumie data rasmi ya KICD iliyotolewa hapa chini PEKEE. USIBUNI, USITENGENEZE, au USIZUSHE matokeo ya kujifunza, majina ya strand, majina ya sub-strand, au maudhui ya mtaala ambayo hayapo katika mfumo wa KICD.
+
+UMAHIRI WA CBC: Kila somo lazima lijeneze UMAHIRI — uwezo wa kutumia mchanganyiko wa Maarifa, Ujuzi, na Mitazamo (KSA) kutekeleza kazi.
+
+STADI MUHIMU ZA CBC (zingatia katika shughuli za kujifunza):
+- Mawasiliano na Ushirikiano (k.m., "Kufanya kazi kwa jozi...", "Kujadili katika vikundi...")
+- Kufikiri kwa Kina na Utatuzi wa Matatizo (k.m., "Kutafuta suluhisho la...", "Kulinganisha...")
+- Ujuzi wa Kidijitali (k.m., "Kutumia simu/kompyuta kutafuta...", "Kutazama video...")
+- Ubunifu na Uvumbuzi (k.m., "Kubuni muundo kwa kutumia...", "Kuunda mfano wa...")
+
+MAADILI YA CBC (zingatia katika matokeo ya Mitazamo):
+Heshima, Uwajibikaji, Upendo, Umoja, Amani, Uadilifu, Uzalendo, Haki ya Kijamii.
+
+MFUMO WA VITENZI VYA KSA:
+MAARIFA (vitenzi vya kufahamu):
+  kutambua, kutaja, kuorodhesha, kueleza, kufafanua, kulinganisha, kutofautisha, kuelezea, kubainisha
+
+UJUZI (vitenzi vya vitendo):
+  kutekeleza, kutumia, kujenga, kuonyesha, kuchora, kuhesabu, kupima, kutatua, kuimba, kukata, kupaka, kushiriki, kufanya mazoezi, kupanga, kurekodi, kutofautisha, kufasiri, kupendekeza, kucheza jukumu, kuendesha, kuunda
+
+MITAZAMO (vitenzi vya thamani):
+  kuthamini, kuthamini thamani, kuonyesha, kutunza, kufurahia, kuzingatia, kuendeleza, kujitolea, kuweka kipaumbele, kukuza, kuheshimu, kuonyesha huruma, kutetea
+
+VITENZI VILIVYOKATAZWA (usitumie):
+  kujua, kuelewa, kujifunza kuhusu, fanya shughuli, jua kuhusu, angalia tu, pita
+
+Daima rudisha JSON halali. Hakuna markdown, hakuna maandishi mengine."""
 
 
 class LessonArchitectAgent:
@@ -89,16 +143,34 @@ class LessonArchitectAgent:
         
         # Banned weak verbs (KICD CBC standards)
         self.banned_verbs = {
-            "know", "understand", "learn", "appreciate", "be aware of",
-            "realize", "recognize", "comprehend", "grasp"
+            "know", "understand", "learn", "be aware of",
+            "realize", "comprehend", "grasp", "carry out", "find out",
+            "look at", "get to know", "learn about", "talk about", "go through"
         }
         
-        # Approved action verbs
-        self.action_verbs = {
-            "calculate", "demonstrate", "analyze", "create", "evaluate",
-            "apply", "solve", "construct", "design", "investigate",
-            "compare", "classify", "measure", "explain", "describe"
+        # KSA verb framework (from scheme-scribe-ai)
+        self.knowledge_verbs = {
+            "identify", "define", "describe", "name", "outline", "state",
+            "recognize", "explain", "list", "label", "recall", "summarize",
+            "distinguish", "illustrate", "compare", "classify"
         }
+        
+        self.skills_verbs = {
+            "demonstrate", "perform", "practice", "practise", "model", "draw",
+            "calculate", "manipulate", "use", "collaborate", "execute", "construct",
+            "sing", "measure", "sketch", "solve", "trace", "cut", "colour", "paint",
+            "observe", "record", "differentiate", "interpret", "suggest", "role-play",
+            "conduct", "participate", "sort", "express", "create", "conserve"
+        }
+        
+        self.attitudes_verbs = {
+            "appreciate", "value", "show", "care", "demonstrate responsibility",
+            "acknowledge", "enjoy", "uphold", "persist", "commit", "adhere",
+            "advocate", "respect", "empathize", "prioritize", "develop"
+        }
+        
+        # Combined action verbs for backward compatibility
+        self.action_verbs = self.knowledge_verbs | self.skills_verbs | self.attitudes_verbs
 
     def _provider(self) -> LLMProvider:
         if self._llm is None:
@@ -352,9 +424,72 @@ class LessonArchitectAgent:
         """Generate content for a single week."""
         sub_strand_name = sub_strand.get("name", "")
         learning_outcomes = sub_strand.get("learningOutcomes", [])
+        suggested_experiences = sub_strand.get("suggestedExperiences", [])
+        key_inquiry_question = sub_strand.get("keyInquiryQuestion", "")
         
-        # Build prompt for LLM
-        prompt = f"""Generate CBC-compliant scheme of work content for one week.
+        # Determine if Kiswahili
+        is_kiswahili = "kiswahili" in subject.lower()
+        
+        # Build official KICD context
+        official_context = ""
+        if learning_outcomes:
+            official_context += f"\n\nOFFICIAL KICD LEARNING OUTCOMES for \"{sub_strand_name}\":\n"
+            for i, outcome in enumerate(learning_outcomes):
+                official_context += f"  {chr(97 + i)}) {outcome}\n"
+        
+        if key_inquiry_question:
+            official_context += f"\nOFFICIAL KEY INQUIRY QUESTION: \"{key_inquiry_question}\"\n"
+        
+        if suggested_experiences:
+            official_context += f"\nOFFICIAL SUGGESTED LEARNING EXPERIENCES:\n"
+            for exp in suggested_experiences:
+                official_context += f"  - {exp}\n"
+        
+        # Select system prompt based on language
+        system_prompt = _SYSTEM_PROMPT_SW if is_kiswahili else _SYSTEM_PROMPT_EN
+        
+        # Build user prompt with detailed instructions
+        if is_kiswahili:
+            prompt = f"""Tengeneza maudhui ya mpango wa kazi wa CBC kwa wiki moja.
+
+Gredi: {grade}
+Somo: {subject}
+Wiki: {week}
+Mada: {strand}
+Mada Ndogo: {sub_strand_name}
+Masomo wiki hii: {lessons_per_week}
+{official_context}
+
+Tengeneza maudhui yenye:
+1. Matokeo Maalum Yanayotarajiwa (3 matokeo) - Tumia vitenzi vya KSA
+2. Maswali Dadisi Muhimu (2-3 maswali)
+3. Shughuli za Kujifunza ({lessons_per_week} shughuli - moja kwa kila somo)
+4. Rasilimali - Vifaa vinavyohitajika (tumia muktadha wa Kenya)
+5. Tathmini - Jinsi ya kuangalia uelewa
+6. Maoni - Maswali ya kujitathmini kwa mwalimu
+
+KANUNI MUHIMU:
+- Tumia vitenzi vya KSA tu: {', '.join(list(self.knowledge_verbs | self.skills_verbs | self.attitudes_verbs)[:15])}
+- USITUMIE vitenzi dhaifu: {', '.join(list(self.banned_verbs)[:5])}
+- Tumia mifano ya Kenya: matatu, shamba, M-Pesa, ugali, shilingi, n.k.
+- Oanisha na matokeo rasmi ya KICD yaliyotolewa hapo juu
+- Fanya shughuli ziwe za vitendo na zenye utamaduni
+
+Rudisha JSON HALALI:
+{{
+  "week": {week},
+  "strand": "{strand}",
+  "sub_strand": "{sub_strand_name}",
+  "specific_learning_outcomes": ["Tokeo 1", "Tokeo 2", "Tokeo 3"],
+  "key_inquiry_questions": ["Swali 1", "Swali 2", "Swali 3"],
+  "learning_experiences": ["Shughuli 1", "Shughuli 2", ...],
+  "resources": ["Rasilimali 1", "Rasilimali 2", ...],
+  "assessment": ["Njia ya tathmini 1", "Njia ya tathmini 2"],
+  "reflection": "Swali la kujitathmini"
+}}
+"""
+        else:
+            prompt = f"""Generate CBC-compliant scheme of work content for one week.
 
 Grade: {grade}
 Subject: {subject}
@@ -362,59 +497,86 @@ Week: {week}
 Strand: {strand}
 Sub-Strand: {sub_strand_name}
 Lessons this week: {lessons_per_week}
-Language: {language}
-
-Official Learning Outcomes (KICD):
-{json.dumps(learning_outcomes, indent=2)}
+{official_context}
 
 Generate content with:
-1. Specific Learning Outcomes (SLOs) - 2-3 outcomes using ACTION VERBS
+1. Specific Learning Outcomes (SLOs) - EXACTLY 3 outcomes in KSA order
+   a) KNOWLEDGE outcome - MUST start with: {', '.join(list(self.knowledge_verbs)[:8])}
+   b) SKILLS outcome - MUST start with: {', '.join(list(self.skills_verbs)[:8])}
+   c) ATTITUDES outcome - MUST start with: {', '.join(list(self.attitudes_verbs)[:8])}
 2. Key Inquiry Questions (KIQs) - 2-3 thought-provoking questions
 3. Learning Experiences - {lessons_per_week} activities (one per lesson)
-4. Resources - Materials needed (use Kenyan context)
-5. Assessment - How to check understanding
+   - Each activity must be SPECIFIC, HANDS-ON, and OBSERVABLE
+   - Use Kenyan context: matatu, shamba, M-Pesa, ugali, shillings, etc.
+4. Resources - Materials needed (be SPECIFIC, not generic)
+   - Example: "KLB Visionary {subject} {grade} Learner's Book pages 12-15"
+   - NOT just "textbooks" or "charts"
+5. Assessment - How to check understanding (oral questions, observation, written work)
 6. Reflection - Teacher reflection prompt
 
 CRITICAL RULES:
-- Use ONLY action verbs: {', '.join(list(self.action_verbs)[:10])}
-- NEVER use weak verbs: {', '.join(list(self.banned_verbs)[:5])}
-- Use Kenyan examples: matatu, shamba, M-Pesa, ugali, shillings, etc.
+- Use ONLY action verbs from KSA framework
+- NEVER use banned verbs: {', '.join(list(self.banned_verbs)[:8])}
 - Align with KICD learning outcomes provided above
 - Make activities practical and culturally relevant
+- Each SLO must be in strict KSA order: a) Knowledge, b) Skills, c) Attitudes
 
-Return STRICT JSON:
+Return STRICT JSON (no markdown, no extra text):
 {{
   "week": {week},
   "strand": "{strand}",
   "sub_strand": "{sub_strand_name}",
-  "specific_learning_outcomes": ["SLO 1", "SLO 2", "SLO 3"],
+  "specific_learning_outcomes": ["a) [Knowledge verb] ...", "b) [Skills verb] ...", "c) [Attitudes verb] ..."],
   "key_inquiry_questions": ["KIQ 1", "KIQ 2", "KIQ 3"],
   "learning_experiences": ["Activity 1", "Activity 2", ...],
-  "resources": ["Resource 1", "Resource 2", ...],
+  "resources": ["Specific resource 1", "Specific resource 2", ...],
   "assessment": ["Assessment method 1", "Assessment method 2"],
   "reflection": "Reflection prompt"
 }}
 """
         
         # Generate with LLM
-        raw = await self._provider().generate(prompt, system=_SYSTEM_PROMPT)
+        raw = await self._provider().generate(prompt, system=system_prompt)
         
-        # Parse JSON
-        try:
-            data = json.loads(raw.strip())
-        except json.JSONDecodeError:
-            # Try to extract JSON from response
-            import re
-            match = re.search(r'\{.*\}', raw, re.DOTALL)
-            if match:
-                data = json.loads(match.group(0))
-            else:
-                raise AgentError("LLM did not return valid JSON")
+        # Parse JSON with robust extraction
+        data = self._extract_json(raw)
         
         # Validate and enforce rules
-        data = self._validate_week_content(data, week, strand, sub_strand_name)
+        data = self._validate_week_content(data, week, strand, sub_strand_name, is_kiswahili)
         
         return data
+    
+    def _extract_json(self, raw: str) -> Dict[str, Any]:
+        """Extract JSON from LLM response with robust error handling."""
+        cleaned = raw.strip()
+        
+        # Remove markdown code fences
+        if cleaned.startswith("```"):
+            cleaned = cleaned.replace("```json", "").replace("```", "").strip()
+        
+        # Try direct parse first
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError:
+            pass
+        
+        # Try to find JSON object in response
+        import re
+        match = re.search(r'\{.*\}', cleaned, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group(0))
+            except json.JSONDecodeError:
+                pass
+        
+        # Last resort: try to fix common issues
+        try:
+            # Remove trailing commas
+            fixed = re.sub(r',\s*}', '}', cleaned)
+            fixed = re.sub(r',\s*]', ']', fixed)
+            return json.loads(fixed)
+        except json.JSONDecodeError as e:
+            raise AgentError(f"LLM did not return valid JSON: {e}\nRaw response: {raw[:200]}")
 
     def _validate_week_content(
         self,
@@ -422,8 +584,9 @@ Return STRICT JSON:
         week: int,
         strand: str,
         sub_strand: str,
+        is_kiswahili: bool = False,
     ) -> Dict[str, Any]:
-        """Validate and enforce CBC rules on generated content."""
+        """Validate and enforce CBC rules on generated content (Guardrails from scheme-scribe-ai)."""
         # Ensure required fields
         data.setdefault("week", week)
         data.setdefault("strand", strand)
@@ -442,22 +605,99 @@ Return STRICT JSON:
             
         data.setdefault("reflection", "")
         
-        # Check for banned verbs in SLOs
+        # GUARDRAIL 1: Validate SLO structure (must have exactly 3 in KSA order)
         slos = data.get("specific_learning_outcomes", [])
-        for i, slo in enumerate(slos):
+        if len(slos) < 3:
+            # Pad with generic outcomes if missing
+            while len(slos) < 3:
+                if len(slos) == 0:
+                    slos.append("a) Identify key concepts related to the topic")
+                elif len(slos) == 1:
+                    slos.append("b) Demonstrate understanding through practical activities")
+                else:
+                    slos.append("c) Appreciate the importance of the topic in daily life")
+        
+        # GUARDRAIL 2: Check for banned verbs and enforce KSA verb framework
+        for i, slo in enumerate(slos[:3]):  # Only validate first 3
             slo_lower = slo.lower()
+            
+            # Check for banned verbs
             for banned in self.banned_verbs:
                 if banned in slo_lower:
                     self.logger.warning(
                         f"Banned verb '{banned}' found in SLO",
                         week=week,
-                        slo=slo
+                        slo=slo[:50]
                     )
-                    # Try to fix by replacing with action verb
-                    # This is a simple heuristic - in production you'd want more sophisticated replacement
-                    slos[i] = slo.replace(banned, "demonstrate")
+                    # Replace with appropriate KSA verb based on position
+                    if i == 0:  # Knowledge
+                        slos[i] = slo.replace(banned, "identify")
+                    elif i == 1:  # Skills
+                        slos[i] = slo.replace(banned, "demonstrate")
+                    else:  # Attitudes
+                        slos[i] = slo.replace(banned, "appreciate")
+            
+            # GUARDRAIL 3: Enforce KSA ordering
+            # a) must start with Knowledge verb
+            # b) must start with Skills verb
+            # c) must start with Attitudes verb
+            if i == 0:  # Knowledge outcome
+                starts_with_k_verb = any(slo_lower.startswith(v) or slo_lower.startswith(f"a) {v}") for v in self.knowledge_verbs)
+                if not starts_with_k_verb:
+                    self.logger.warning(f"SLO a) doesn't start with Knowledge verb", week=week, slo=slo[:50])
+                    # Try to fix by prepending "identify"
+                    if not slo.startswith("a)"):
+                        slos[i] = f"a) Identify {slo.lstrip('a)').strip()}"
+                    else:
+                        content = slo.split(")", 1)[1].strip() if ")" in slo else slo
+                        slos[i] = f"a) Identify {content}"
+            
+            elif i == 1:  # Skills outcome
+                starts_with_s_verb = any(slo_lower.startswith(v) or slo_lower.startswith(f"b) {v}") for v in self.skills_verbs)
+                if not starts_with_s_verb:
+                    self.logger.warning(f"SLO b) doesn't start with Skills verb", week=week, slo=slo[:50])
+                    if not slo.startswith("b)"):
+                        slos[i] = f"b) Demonstrate {slo.lstrip('b)').strip()}"
+                    else:
+                        content = slo.split(")", 1)[1].strip() if ")" in slo else slo
+                        slos[i] = f"b) Demonstrate {content}"
+            
+            elif i == 2:  # Attitudes outcome
+                starts_with_a_verb = any(slo_lower.startswith(v) or slo_lower.startswith(f"c) {v}") for v in self.attitudes_verbs)
+                if not starts_with_a_verb:
+                    self.logger.warning(f"SLO c) doesn't start with Attitudes verb", week=week, slo=slo[:50])
+                    if not slo.startswith("c)"):
+                        slos[i] = f"c) Appreciate {slo.lstrip('c)').strip()}"
+                    else:
+                        content = slo.split(")", 1)[1].strip() if ")" in slo else slo
+                        slos[i] = f"c) Appreciate {content}"
         
-        data["specific_learning_outcomes"] = slos
+        data["specific_learning_outcomes"] = slos[:3]  # Only keep first 3
+        
+        # GUARDRAIL 4: Ensure resources are specific, not generic
+        resources = data.get("resources", [])
+        generic_terms = ["textbook", "chart", "video", "audio", "flashcard", "worksheet"]
+        for i, resource in enumerate(resources):
+            resource_lower = resource.lower()
+            # Check if resource is too generic (just the term without details)
+            if any(term in resource_lower and len(resource) < 20 for term in generic_terms):
+                self.logger.warning(f"Generic resource found: {resource}", week=week)
+                # Add context to make it specific
+                resources[i] = f"{resource} related to {sub_strand}"
+        
+        data["resources"] = resources
+        
+        # GUARDRAIL 5: Ensure learning experiences are action-oriented
+        experiences = data.get("learning_experiences", [])
+        for i, exp in enumerate(experiences):
+            exp_lower = exp.lower()
+            # Check for passive language
+            if any(passive in exp_lower for passive in ["learn about", "know about", "understand"]):
+                self.logger.warning(f"Passive learning experience: {exp[:50]}", week=week)
+                # Try to make it more active
+                experiences[i] = exp.replace("learn about", "explore").replace("know about", "identify").replace("understand", "demonstrate understanding of")
+        
+        data["learning_experiences"] = experiences
         
         return data
 
@@ -687,51 +927,130 @@ Return STRICT JSON:
             }
 
     def _format_scheme_as_text(self, scheme: Dict[str, Any]) -> str:
-        """Format scheme data as readable text."""
+        """Format scheme data as readable markdown text (matching scheme-scribe-ai format)."""
         lines = []
-        lines.append(f"# SCHEME OF WORK")
-        lines.append(f"**Grade:** {scheme['grade']}")
-        lines.append(f"**Subject:** {scheme['subject']}")
-        lines.append(f"**Term:** {scheme['term']}")
-        lines.append(f"**Duration:** {scheme['total_weeks']} Weeks")
+        
+        # Header
+        is_kiswahili = "kiswahili" in scheme.get('subject', '').lower()
+        
+        if is_kiswahili:
+            lines.append(f"# MPANGO WA KAZI")
+            lines.append(f"**Gredi:** {scheme['grade']}")
+            lines.append(f"**Somo:** {scheme['subject']}")
+            lines.append(f"**Muhula:** {scheme['term']}")
+            lines.append(f"**Muda:** Wiki {scheme['total_weeks']}")
+            lines.append(f"**Masomo kwa Wiki:** {scheme['lessons_per_week']}")
+        else:
+            lines.append(f"# SCHEME OF WORK")
+            lines.append(f"**Grade:** {scheme['grade']}")
+            lines.append(f"**Subject:** {scheme['subject']}")
+            lines.append(f"**Term:** {scheme['term']}")
+            lines.append(f"**Duration:** {scheme['total_weeks']} Weeks")
+            lines.append(f"**Lessons per Week:** {scheme['lessons_per_week']}")
+        
+        lines.append("")
+        lines.append("---")
         lines.append("")
         
+        # Week-by-week breakdown
         for week_data in scheme['rows']:
-            lines.append(f"## Week {week_data.get('week', '?')}: {week_data.get('strand', 'Topic')}")
+            week_num = week_data.get('week', '?')
+            strand = week_data.get('strand', 'Topic')
+            sub_strand = week_data.get('sub_strand', '')
+            
+            if is_kiswahili:
+                lines.append(f"## Wiki {week_num}: {strand}")
+                if sub_strand:
+                    lines.append(f"**Mada Ndogo:** {sub_strand}")
+            else:
+                lines.append(f"## Week {week_num}: {strand}")
+                if sub_strand:
+                    lines.append(f"**Sub-Strand:** {sub_strand}")
+            
             lines.append("")
             
-            if 'slos' in week_data:
-                lines.append("**Specific Learning Outcomes:**")
-                for slo in week_data['slos']:
+            # Specific Learning Outcomes
+            slos = week_data.get('specific_learning_outcomes', [])
+            if slos:
+                if is_kiswahili:
+                    lines.append("### Matokeo Maalum Yanayotarajiwa")
+                else:
+                    lines.append("### Specific Learning Outcomes")
+                
+                for slo in slos:
                     lines.append(f"- {slo}")
                 lines.append("")
             
-            if 'key_inquiry_questions' in week_data:
-                lines.append("**Key Inquiry Questions:**")
-                for kiq in week_data['key_inquiry_questions']:
+            # Key Inquiry Questions
+            kiqs = week_data.get('key_inquiry_questions', [])
+            if kiqs:
+                if is_kiswahili:
+                    lines.append("### Maswali Dadisi Muhimu")
+                else:
+                    lines.append("### Key Inquiry Questions")
+                
+                for kiq in kiqs:
                     lines.append(f"- {kiq}")
                 lines.append("")
             
-            if 'learning_experiences' in week_data:
-                lines.append("**Learning Experiences:**")
-                for exp in week_data['learning_experiences']:
-                    lines.append(f"- {exp}")
+            # Learning Experiences
+            experiences = week_data.get('learning_experiences', [])
+            if experiences:
+                if is_kiswahili:
+                    lines.append("### Shughuli za Kujifunza")
+                else:
+                    lines.append("### Learning Experiences")
+                
+                for i, exp in enumerate(experiences, 1):
+                    if is_kiswahili:
+                        lines.append(f"**Somo {i}:** {exp}")
+                    else:
+                        lines.append(f"**Lesson {i}:** {exp}")
                 lines.append("")
             
-            if 'resources' in week_data:
-                lines.append("**Resources:**")
-                for res in week_data['resources']:
-                    lines.append(f"- {res}")
+            # Resources
+            resources = week_data.get('resources', [])
+            if resources:
+                if is_kiswahili:
+                    lines.append("### Rasilimali")
+                else:
+                    lines.append("### Learning Resources")
+                
+                for resource in resources:
+                    lines.append(f"- {resource}")
                 lines.append("")
             
-            if 'assessment' in week_data:
-                lines.append("**Assessment:**")
-                for assess in week_data['assessment']:
-                    lines.append(f"- {assess}")
+            # Assessment
+            assessment = week_data.get('assessment', [])
+            if assessment:
+                if is_kiswahili:
+                    lines.append("### Tathmini")
+                else:
+                    lines.append("### Assessment Methods")
+                
+                for method in assessment:
+                    lines.append(f"- {method}")
+                lines.append("")
+            
+            # Reflection
+            reflection = week_data.get('reflection', '')
+            if reflection:
+                if is_kiswahili:
+                    lines.append("### Maoni ya Mwalimu")
+                    lines.append(f"*{reflection}*")
+                else:
+                    lines.append("### Teacher Reflection")
+                    lines.append(f"*{reflection}*")
                 lines.append("")
             
             lines.append("---")
             lines.append("")
+        
+        # Footer
+        if is_kiswahili:
+            lines.append("*Mpango huu umejengwa kwa mujibu wa Mtaala wa CBC - KICD Kenya*")
+        else:
+            lines.append("*This scheme is aligned with the CBC Curriculum - KICD Kenya*")
         
         return "\n".join(lines)
     
