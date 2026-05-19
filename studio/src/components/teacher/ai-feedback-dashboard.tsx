@@ -12,6 +12,7 @@ import {
   CheckCircle, XCircle, AlertCircle, Lightbulb, Users, Award
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { getApiUrl } from '@/lib/api-config'
 
 interface AIDecision {
   id: string
@@ -55,7 +56,7 @@ export function AIFeedbackDashboard({ teacherId }: { teacherId: string }) {
   const [suggestedAlternative, setSuggestedAlternative] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const apiUrl = process.env.NEXT_PUBLIC_AI_AGENTS_URL || 'http://localhost:8001'
+  const apiUrl = getApiUrl()
 
   useEffect(() => {
     fetchSummary()

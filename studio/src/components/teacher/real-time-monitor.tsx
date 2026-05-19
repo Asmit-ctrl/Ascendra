@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { buildWebSocketUrl, buildApiUrl, API_ENDPOINTS } from '@/lib/api-config'
 
 interface StudentActivity {
   student_id: string
@@ -22,7 +23,7 @@ export function RealTimeMonitor() {
 
   useEffect(() => {
     // Connect to WebSocket
-    const websocket = new WebSocket('ws://localhost:8001/dashboard/ws/teacher')
+    const websocket = new WebSocket(buildWebSocketUrl(API_ENDPOINTS.DASHBOARD_WS_TEACHER))
     
     websocket.onopen = () => {
       console.log('Connected to teacher dashboard')
@@ -53,8 +54,7 @@ export function RealTimeMonitor() {
 
   const fetchActiveStudents = async () => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_AI_AGENTS_URL || 'http://localhost:8001'
-      const response = await fetch(`${apiUrl}/dashboard/students/active`)
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.DASHBOARD_STUDENTS_ACTIVE))
       const data = await response.json()
       setStudents(data)
     } catch (error) {

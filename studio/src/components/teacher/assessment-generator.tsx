@@ -14,6 +14,7 @@ import { Loader2, ClipboardList, Download, Copy, Check, Sparkles, FileQuestion, 
 import { useToast } from '@/hooks/use-toast'
 import { curriculumData } from '@/data/curriculum/curriculum-structure'
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/api-config'
+import { buildApiUrl, API_ENDPOINTS } from '@/lib/api-config'
 import { getHardcodedStrands } from '@/data/curriculum'
 
 export function AssessmentGenerator() {

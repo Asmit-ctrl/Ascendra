@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Progress } from '@/components/ui/progress'
 import { CallInterface } from '@/components/voice/call-interface'
+import { buildApiUrl, API_ENDPOINTS } from '@/lib/api-config'
 
 interface StudentProgress {
   subject: string
@@ -43,8 +44,7 @@ export function StudentDetail({ studentId, studentName, onClose }: StudentDetail
 
   const fetchProgress = async () => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_AI_AGENTS_URL || 'http://localhost:8001'
-      const response = await fetch(`${apiUrl}/dashboard/students/${studentId}/progress`)
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.DASHBOARD_STUDENTS_PROGRESS(studentId)))
       const data = await response.json()
       setProgress(data)
     } catch (error) {
@@ -134,8 +134,7 @@ export function StudentDetail({ studentId, studentName, onClose }: StudentDetail
     
     setSending(true)
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_AI_AGENTS_URL || 'http://localhost:8001'
-      await fetch(`${apiUrl}/dashboard/interventions`, {
+      await fetch(buildApiUrl(API_ENDPOINTS.DASHBOARD_INTERVENTIONS), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

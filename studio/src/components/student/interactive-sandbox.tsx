@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Loader2, RotateCcw, Send } from 'lucide-react'
+import { buildApiUrl, API_ENDPOINTS } from '@/lib/api-config'
 
 interface TelemetryEvent {
   timestamp: number
@@ -169,8 +170,7 @@ export function InteractiveSandbox({
     
     try {
       // Send telemetry to backend
-      const apiUrl = process.env.NEXT_PUBLIC_AI_AGENTS_URL || 'http://localhost:8001'
-      const response = await fetch(`${apiUrl}/telemetry/capture`, {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.TELEMETRY_CAPTURE), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
