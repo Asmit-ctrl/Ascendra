@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { buildWebSocketUrl, buildApiUrl, API_ENDPOINTS } from '@/lib/api-config'
+import { buildApiUrl, buildWebSocketUrl, API_ENDPOINTS } from '@/lib/api-config'
 
 interface StudentActivity {
   student_id: string
