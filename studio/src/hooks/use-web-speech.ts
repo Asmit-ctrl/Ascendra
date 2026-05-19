@@ -31,10 +31,29 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 export type SpeechLanguage = 'english' | 'kiswahili' | 'mixed';
 
+/**
+ * Two distinct STT shapes:
+ *   - 'push-to-talk' — single utterance, hard timeout. The original behaviour:
+ *     student taps mic, says one phrase, transcript is appended to the
+ *     textarea, recognition shuts off.
+ *   - 'call'         — continuous turn-taking for the voice call UI. No
+ *     timeout. Auto-restarts on `onend` while a call is active because
+ *     Chrome stops SpeechRecognition every ~60 s regardless of the
+ *     `continuous` flag — the documented workaround is to start it again
+ *     from inside `onend`.
+ */
+export type SpeechMode = 'push-to-talk' | 'call';
+
 interface UseWebSpeechOptions {
   language?: SpeechLanguage;
-  /** Auto-stop the mic if it's been listening for this many ms. */
+  /** Auto-stop the mic if it's been listening for this many ms.
+   *  Ignored entirely when `mode === 'call'`. */
   listenTimeoutMs?: number;
+  /** Default 'push-to-talk' to preserve existing socratic-chat behaviour. */
+  mode?: SpeechMode;
+  /** Called once per finalized utterance. Used by the call UI to dispatch
+   *  a turn the moment the speaker pauses, without polling finalTranscript. */
+  onUtterance?: (text: string) => void;
 }
 
 interface UseWebSpeechReturn {
@@ -57,6 +76,10 @@ interface UseWebSpeechReturn {
   finalTranscript: string;
   clearFinalTranscript: () => void;
   sttError: string | null;
+
+  // Call mode only — no-op outside of it. Stops the mic, cancels any
+  // in-flight TTS, and prevents the onend auto-restart from firing again.
+  endCall: () => void;
 }
 
 function localeFor(language: SpeechLanguage): string {
@@ -74,6 +97,7 @@ function stripChoiceTokens(text: string): string {
 export function useWebSpeech(opts: UseWebSpeechOptions = {}): UseWebSpeechReturn {
   const language = opts.language ?? 'mixed';
   const listenTimeoutMs = opts.listenTimeoutMs ?? 12_000;
+  const mode: SpeechMode = opts.mode ?? 'push-to-talk';
 
   const [ttsSupported, setTtsSupported] = useState(false);
   const [sttSupported, setSttSupported] = useState(false);
@@ -89,6 +113,19 @@ export function useWebSpeech(opts: UseWebSpeechOptions = {}): UseWebSpeechReturn
   // ship SpeechRecognition types in every TS target.
   const recognitionRef = useRef<any>(null);
   const listenTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Call-mode state: when true, an `onend` event triggers a restart instead
+  // of leaving the mic off. Cleared by `endCall()`, by errors that aren't
+  // routine, and on unmount.
+  const callActiveRef = useRef(false);
+  // Latest onUtterance callback in a ref so the recognition handlers (which
+  // close over it once via useCallback) always see the current function.
+  const onUtteranceRef = useRef<((text: string) => void) | undefined>(opts.onUtterance);
+  useEffect(() => {
+    onUtteranceRef.current = opts.onUtterance;
+  }, [opts.onUtterance]);
+  // Restart-debounce timer so an error+onend pair doesn't tight-loop.
+  const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ---- Capability detection + voice list (run once, client-only) ---------
   useEffect(() => {
@@ -193,9 +230,14 @@ export function useWebSpeech(opts: UseWebSpeechOptions = {}): UseWebSpeechReturn
     setSttError(null);
     setInterimTranscript('');
 
+    const isCall = mode === 'call';
+    if (isCall) callActiveRef.current = true;
+
     const rec = new SpeechRecognition();
     rec.lang = localeFor(language);
-    rec.continuous = false;
+    // Call mode wants the mic to stay open across pauses; push-to-talk wants
+    // it to commit one utterance and shut off.
+    rec.continuous = isCall;
     rec.interimResults = true;
     rec.maxAlternatives = 1;
 
@@ -215,16 +257,32 @@ export function useWebSpeech(opts: UseWebSpeechOptions = {}): UseWebSpeechReturn
       }
       if (interim) setInterimTranscript(interim);
       if (finalChunk) {
-        setFinalTranscript((prev) => (prev ? `${prev} ${finalChunk}`.trim() : finalChunk.trim()));
+        const cleaned = finalChunk.trim();
+        setFinalTranscript((prev) => (prev ? `${prev} ${cleaned}`.trim() : cleaned));
         setInterimTranscript('');
+        // Call UI consumes per-utterance instead of polling.
+        if (isCall && cleaned) {
+          onUtteranceRef.current?.(cleaned);
+        }
       }
     };
 
     rec.onerror = (event: any) => {
-      // "no-speech" and "aborted" are routine — don't yell about them.
+      // "no-speech" and "aborted" are routine — don't yell about them, and
+      // in call mode we still want to auto-restart through onend.
       const code = event?.error;
-      if (code && code !== 'no-speech' && code !== 'aborted') {
-        setSttError(`Voice input error: ${code}`);
+      const routine = !code || code === 'no-speech' || code === 'aborted';
+      if (!routine) {
+        // Hard errors (network, not-allowed, service-not-allowed) should
+        // tear down the call so we don't restart into a permanent failure.
+        if (code === 'not-allowed' || code === 'service-not-allowed') {
+          setSttError(
+            'Microphone access blocked — enable it in your browser settings and try again.'
+          );
+          callActiveRef.current = false;
+        } else {
+          setSttError(`Voice input error: ${code}`);
+        }
       }
       setListening(false);
     };
@@ -235,28 +293,69 @@ export function useWebSpeech(opts: UseWebSpeechOptions = {}): UseWebSpeechReturn
         clearTimeout(listenTimeoutRef.current);
         listenTimeoutRef.current = null;
       }
+      // Chrome stops recognition every ~60s even with continuous=true. If
+      // the call is still active and we weren't torn down by an error,
+      // start a fresh instance. 250 ms debounce prevents an error+onend
+      // pair from spinning.
+      if (callActiveRef.current) {
+        if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+        restartTimerRef.current = setTimeout(() => {
+          restartTimerRef.current = null;
+          if (callActiveRef.current) startListening();
+        }, 250);
+      }
     };
 
     recognitionRef.current = rec;
     try {
       rec.start();
-      listenTimeoutRef.current = setTimeout(() => {
-        stopListening();
-      }, listenTimeoutMs);
+      // Push-to-talk caps mic time so it can't be left open by accident.
+      // Call mode is bounded by the user clicking End Call instead.
+      if (!isCall) {
+        listenTimeoutRef.current = setTimeout(() => {
+          stopListening();
+        }, listenTimeoutMs);
+      }
     } catch (err) {
       const detail = err instanceof Error ? err.message : 'failed to start';
+      // `rec.start()` throws if called while already started — common after
+      // the onend auto-restart races a manual stop. Swallow that specific
+      // case in call mode.
+      if (mode === 'call' && /already started/i.test(detail)) {
+        return;
+      }
       setSttError(`Could not start listening: ${detail}`);
       setListening(false);
     }
-  }, [language, listenTimeoutMs, stopListening]);
+  }, [language, listenTimeoutMs, mode, stopListening]);
+
+  // End-call entry point. Idempotent — safe to call multiple times.
+  const endCall = useCallback(() => {
+    callActiveRef.current = false;
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = null;
+    }
+    stopListening();
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setSpeaking(false);
+  }, [stopListening]);
 
   const clearFinalTranscript = useCallback(() => {
     setFinalTranscript('');
   }, []);
 
-  // Stop the mic if the component unmounts mid-listen.
+  // Stop the mic if the component unmounts mid-listen, and make sure the
+  // call-mode auto-restart cannot fire after we've gone.
   useEffect(() => {
     return () => {
+      callActiveRef.current = false;
+      if (restartTimerRef.current) {
+        clearTimeout(restartTimerRef.current);
+        restartTimerRef.current = null;
+      }
       stopListening();
     };
   }, [stopListening]);
@@ -274,5 +373,6 @@ export function useWebSpeech(opts: UseWebSpeechOptions = {}): UseWebSpeechReturn
     finalTranscript,
     clearFinalTranscript,
     sttError,
+    endCall,
   };
 }

@@ -13,6 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Loader2, ClipboardList, Download, Copy, Check, Sparkles, FileQuestion, Award } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { curriculumData } from '@/data/curriculum/curriculum-structure'
+import { buildApiUrl, API_ENDPOINTS } from '@/lib/api-config'
 import { getHardcodedStrands } from '@/data/curriculum'
 
 export function AssessmentGenerator() {
@@ -319,8 +320,7 @@ Create a comprehensive formative assessment toolkit with:
 - Include Kenyan context examples`
       }
 
-      const apiUrl = process.env.NEXT_PUBLIC_AI_AGENTS_URL || 'http://localhost:8001'
-      const response = await fetch(`${apiUrl}/agents/chat`, {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.AGENTS_CHAT), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

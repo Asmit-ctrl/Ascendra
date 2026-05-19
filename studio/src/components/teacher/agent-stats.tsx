@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
+import { buildApiUrl, API_ENDPOINTS } from '@/lib/api-config'
 
 interface AgentStats {
   agent_type: string
@@ -23,8 +24,7 @@ export function AgentStats() {
 
   const fetchStats = async () => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_AI_AGENTS_URL || 'http://localhost:8001'
-      const response = await fetch(`${apiUrl}/dashboard/agents/stats?hours=1`)
+      const response = await fetch(`${buildApiUrl(API_ENDPOINTS.DASHBOARD_AGENTS_STATS)}?hours=1`)
       const data = await response.json()
       setStats(data)
     } catch (error) {

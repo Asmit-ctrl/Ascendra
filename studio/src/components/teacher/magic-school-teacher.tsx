@@ -13,6 +13,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Loader2, Sparkles, FileText, ClipboardList, BookOpen, Users, MessageSquare, Award, Brain, Download, Copy, Check, Calendar } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { SchemeOfWorkGenerator } from './scheme-of-work-generator'
+import { buildApiUrl, API_ENDPOINTS } from '@/lib/api-config'
 
 export function MagicSchoolTeacher() {
   const { toast } = useToast()
@@ -138,8 +139,7 @@ Tone: Professional, warm, encouraging. Kenyan context.`
           break
       }
 
-      const apiUrl = process.env.NEXT_PUBLIC_AI_AGENTS_URL || 'http://localhost:8001'
-      const response = await fetch(`${apiUrl}/agents/chat`, {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.AGENTS_CHAT), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

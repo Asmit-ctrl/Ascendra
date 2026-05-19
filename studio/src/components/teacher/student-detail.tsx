@@ -1,11 +1,13 @@
 "use client"
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { Phone } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Progress } from '@/components/ui/progress'
+import { CallInterface } from '@/components/voice/call-interface'
 
 interface StudentProgress {
   subject: string
@@ -27,6 +29,14 @@ export function StudentDetail({ studentId, studentName, onClose }: StudentDetail
   const [message, setMessage] = useState('')
   const [sending, setSending] = useState(false)
 
+  // Voice call about this specific student. The agent receives the
+  // student's progress snapshot via `teacherContext` (compass mode), so
+  // replies can reference real telemetry instead of speaking in generic
+  // terms. History is kept in a local ref because the call doesn't need
+  // to persist across page loads — it's a one-off teacher consultation.
+  const [callOpen, setCallOpen] = useState(false)
+  const callHistoryRef = useRef<{ role: 'user' | 'assistant'; content: string }[]>([])
+
   useEffect(() => {
     fetchProgress()
   }, [studentId])
@@ -40,6 +50,83 @@ export function StudentDetail({ studentId, studentName, onClose }: StudentDetail
     } catch (error) {
       console.error('Failed to fetch progress:', error)
     }
+  }
+
+  // Build a compact teacher-context blob from the data we already have on
+  // screen. The /api/chat compass mode expects a string; JSON.stringify is
+  // fine — the Socratic system prompt grounds responses in it.
+  const teacherContext = () => {
+    const summary = progress.map((p) => ({
+      subject: p.subject,
+      topic: p.topic,
+      mastery_pct: Math.round(p.mastery_level * 100),
+      time_min: p.time_spent_minutes,
+      recent_quizzes: p.quiz_scores.slice(-3).map((s) => Math.round(s * 100)),
+    }))
+    return JSON.stringify({ student: studentName, progress: summary }, null, 2)
+  }
+
+  // Streams a single voice-turn through /api/chat. Resolves with the full
+  // assistant text (the call UI hands it to TTS). Throws on transport
+  // errors so CallInterface can surface them without ending the call.
+  const handleCallTurn = async (userText: string): Promise<string> => {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: userText,
+        history: callHistoryRef.current,
+        // These two are required by the schema even in compass mode; we
+        // pass sensible defaults — the actual grounding comes from
+        // teacherContext.
+        grade: 'Teacher',
+        subject: 'Student Coaching',
+        language: 'english',
+        studentName: 'Teacher',
+        mode: 'compass',
+        teacherContext: teacherContext(),
+      }),
+    })
+
+    if (!res.ok || !res.body) {
+      let detail = `Request failed (${res.status})`
+      try {
+        const data = await res.json()
+        if (data?.error) detail = `${data.error}${data.detail ? ` — ${data.detail}` : ''}`
+      } catch { /* not JSON */ }
+      throw new Error(detail)
+    }
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let accumulated = ''
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      let sep: number
+      while ((sep = buffer.indexOf('\n\n')) !== -1) {
+        const frame = buffer.slice(0, sep).trim()
+        buffer = buffer.slice(sep + 2)
+        if (!frame.startsWith('data:')) continue
+        const payload = frame.slice(5).trim()
+        if (payload === '[DONE]') continue
+        try {
+          const parsed = JSON.parse(payload) as { delta?: string; error?: string; detail?: string }
+          if (parsed.error) throw new Error(parsed.detail || parsed.error)
+          if (parsed.delta) accumulated += parsed.delta
+        } catch (err) {
+          throw err instanceof Error ? err : new Error('Stream parse error')
+        }
+      }
+    }
+
+    // Strip any [CHOICE: ...] tokens so they aren't read aloud verbatim.
+    const spoken = accumulated.replace(/\[CHOICE:[^\]]*\]/g, '').trim()
+    callHistoryRef.current.push({ role: 'user', content: userText })
+    callHistoryRef.current.push({ role: 'assistant', content: spoken })
+    return spoken
   }
 
   const sendMessage = async () => {
@@ -115,6 +202,30 @@ export function StudentDetail({ studentId, studentName, onClose }: StudentDetail
         </CardContent>
       </Card>
 
+      {/* Voice consult with the Synthesis Tutor about this student */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Discuss {studentName} with the Synthesis Tutor</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Ask follow-up questions out loud — the tutor sees this student's
+            progress and can suggest next steps, interventions, or
+            misconceptions to probe.
+          </p>
+          <Button
+            onClick={() => {
+              callHistoryRef.current = []
+              setCallOpen(true)
+            }}
+            className="gap-2"
+          >
+            <Phone className="h-4 w-4" />
+            Start voice call
+          </Button>
+        </CardContent>
+      </Card>
+
       {/* Send Message */}
       <Card>
         <CardHeader>
@@ -132,6 +243,18 @@ export function StudentDetail({ studentId, studentName, onClose }: StudentDetail
           </Button>
         </CardContent>
       </Card>
+
+      <CallInterface
+        open={callOpen}
+        onOpenChange={setCallOpen}
+        persona={{
+          name: 'Synthesis Tutor',
+          subtitle: `About ${studentName}`,
+          initial: 'S',
+        }}
+        language="english"
+        onUserTurn={handleCallTurn}
+      />
     </div>
   )
 }

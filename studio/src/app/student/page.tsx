@@ -109,6 +109,13 @@ export default function StudentDashboardPage() {
 
     setGamificationMode(loadGamificationMode());
 
+    // Check if grade is set - if not, redirect to journey for grade selection
+    const savedGrade = localStorage.getItem('learningJourney.grade');
+    if (!savedGrade) {
+      router.push('/student/journey');
+      return;
+    }
+
     // Load personalized learning data
     loadPersonalizedData();
   }, []);
@@ -149,6 +156,18 @@ export default function StudentDashboardPage() {
       ? `/student/tutor-dashboard?subject=${encodeURIComponent(subject)}`
       : '/student/tutor-dashboard';
     router.push(target);
+  };
+
+  const goToChat = (subject: string) => {
+    const savedGrade = localStorage.getItem('learningJourney.grade');
+    if (!savedGrade) {
+      router.push('/student/journey');
+      return;
+    }
+    
+    // Save subject and go directly to chat
+    localStorage.setItem('learningJourney.subject', subject);
+    router.push(`/student/chat/${encodeURIComponent(subject)}?grade=${encodeURIComponent(savedGrade)}`);
   };
 
   const getPersonalizedGreeting = () => {
@@ -336,7 +355,7 @@ export default function StudentDashboardPage() {
                   learningProgress.map((progress) => (
                     <button
                       key={progress.subject}
-                      onClick={() => goToTutor(progress.subject)}
+                      onClick={() => goToChat(progress.subject)}
                       className="w-full text-left rounded-lg p-4 border hover:bg-muted transition-colors"
                     >
                       <div className="flex justify-between items-start mb-2">
@@ -357,7 +376,10 @@ export default function StudentDashboardPage() {
                            progress.overallProgress < 70 ? 'Making good progress' :
                            'Mastering concepts'}
                         </span>
-                        <ArrowRight className="h-3 w-3" />
+                        <span className="flex items-center gap-1">
+                          Click to start learning
+                          <ArrowRight className="h-3 w-3" />
+                        </span>
                       </div>
                     </button>
                   ))
@@ -391,7 +413,7 @@ export default function StudentDashboardPage() {
                   {learningPath.map((p) => (
                     <button
                       key={p.subject}
-                      onClick={() => goToTutor(p.subject)}
+                      onClick={() => goToChat(p.subject)}
                       className="w-full text-left rounded-lg p-2 -mx-2 hover:bg-muted transition-colors"
                     >
                       <div className="flex justify-between text-sm mb-2">

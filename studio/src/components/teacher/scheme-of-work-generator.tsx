@@ -9,6 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Loader2, BookOpen, Download, Copy, Check, Calendar } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { curriculumData } from '@/data/curriculum/curriculum-structure'
+import { buildApiUrl, API_ENDPOINTS } from '@/lib/api-config'
 
 export function SchemeOfWorkGenerator() {
   const { toast } = useToast()
@@ -104,8 +105,7 @@ Format the scheme as follows:
 
 Make it detailed, practical, and ready for Kenyan teachers to use. Ensure it aligns with KICD CBC standards.`
 
-      const apiUrl = process.env.NEXT_PUBLIC_AI_AGENTS_URL || 'http://localhost:8001'
-      const response = await fetch(`${apiUrl}/agents/chat`, {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.AGENTS_CHAT), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

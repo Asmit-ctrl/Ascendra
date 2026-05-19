@@ -33,8 +33,8 @@ import {
   AlertCircle,
   Square,
   RotateCcw,
-  Mic,
-  MicOff,
+  Phone,
+  Mic as MicIcon,
   Volume2,
   VolumeX,
 } from 'lucide-react';
@@ -50,6 +50,7 @@ import {
   type StoredChatMessage,
 } from '@/lib/socratic-history';
 import { useWebSpeech } from '@/hooks/use-web-speech';
+import { CallInterface } from '@/components/voice/call-interface';
 
 export type ChatLanguage = 'english' | 'kiswahili' | 'mixed';
 
@@ -71,6 +72,9 @@ interface ChatMessage {
   choices?: string[];
   /** True while this assistant message is still being streamed. */
   streaming?: boolean;
+  /** Set to 'voice' when the turn happened inside a call. Optional so old
+   *  localStorage payloads without it keep loading cleanly. */
+  source?: 'voice' | 'text';
 }
 
 const CHOICE_TOKEN = /\[CHOICE:\s*([^\]]+)\]/g;
@@ -151,7 +155,15 @@ export function SocraticChat({
   const hydratedRef = useRef(false);
 
   // ---- Voice I/O ---------------------------------------------------------
+  // The hook is used here ONLY for auto-speak (TTS) of typed-mode replies
+  // and to detect STT capability for showing the Call button. The
+  // push-to-talk-into-textarea behaviour is gone — the mic button now
+  // opens a full-screen call instead. See CallInterface below.
   const speech = useWebSpeech({ language });
+
+  // Open/close state for the call dialog. Hoisted here so we can hand
+  // send() into it as the per-turn callback.
+  const [callOpen, setCallOpen] = useState(false);
 
   // Persisted toggle so the student's "speak responses" preference survives
   // page reloads. Defaults OFF — surprise audio is rude.
@@ -174,15 +186,8 @@ export function SocraticChat({
   // Track the last message we spoke so we don't re-speak on every render.
   const lastSpokenIdRef = useRef<string | null>(null);
 
-  // Append final STT transcript into the input textbox, then clear it from
-  // the hook so we don't double-apply it.
-  useEffect(() => {
-    if (!speech.finalTranscript) return;
-    setInput((prev) =>
-      prev ? `${prev} ${speech.finalTranscript}`.trim() : speech.finalTranscript.trim()
-    );
-    speech.clearFinalTranscript();
-  }, [speech.finalTranscript, speech]);
+  // (Push-to-talk-into-textarea was removed when the mic button became a
+  // "Call" button. The CallInterface owns its own STT loop now.)
 
   // ---- Hydrate from localStorage on mount or when key fields change -------
   useEffect(() => {
@@ -276,9 +281,9 @@ export function SocraticChat({
   }, [studentId, subject, studentName, teacherContext]);
 
   const send = useCallback(
-    async (rawText: string) => {
+    async (rawText: string, source: 'voice' | 'text' = 'text'): Promise<string> => {
       const text = rawText.trim();
-      if (!text || busy) return;
+      if (!text || busy) return '';
 
       setError(null);
 
@@ -286,6 +291,7 @@ export function SocraticChat({
         id: makeId(),
         role: 'user',
         content: text,
+        source,
       };
       const assistantId = makeId();
       const assistantPlaceholder: ChatMessage = {
@@ -293,6 +299,7 @@ export function SocraticChat({
         role: 'assistant',
         content: '',
         streaming: true,
+        source,
       };
 
       // History sent to the model: everything currently rendered except
@@ -337,7 +344,7 @@ export function SocraticChat({
           // User pressed Stop before the request even started — silently drop.
           setMessages((prev) => prev.filter((m) => m.id !== assistantId));
           setBusy(false);
-          return;
+          return '';
         }
         const detail = err instanceof Error ? err.message : 'Network error';
         setError(`Could not reach the mentor: ${detail}`);
@@ -349,7 +356,10 @@ export function SocraticChat({
               : m
           )
         );
-        return;
+        // Throw in voice mode so the call UI shows a transient error and
+        // reopens the mic; the typed-send path can ignore the rejection.
+        if (source === 'voice') throw new Error(detail);
+        return '';
       }
 
       if (!res.ok || !res.body) {
@@ -376,7 +386,8 @@ export function SocraticChat({
               : m
           )
         );
-        return;
+        if (source === 'voice') throw new Error(errMsg);
+        return '';
       }
 
       // Consume SSE: lines of "data: {json}\n\n" or "data: [DONE]\n\n".
@@ -445,7 +456,8 @@ export function SocraticChat({
             )
           );
           setBusy(false);
-          return;
+          if (source === 'voice') throw new Error(detail);
+          return '';
         }
       }
 
@@ -468,6 +480,9 @@ export function SocraticChat({
         )
       );
       setBusy(false);
+      // Return the speakable content (without [CHOICE: ...] tokens) so the
+      // call UI can hand it to TTS. Empty string when stopped early.
+      return stoppedByUser ? '' : content;
     },
     [busy, grade, language, messages, studentName, subject, teacherContext]
   );
@@ -544,54 +559,27 @@ export function SocraticChat({
       )}
 
       <div className="border-t bg-background">
-        {speech.listening && (
-          <div className="px-3 pt-2 text-xs text-muted-foreground flex items-center gap-2">
-            <span className="inline-block h-2 w-2 rounded-full bg-destructive animate-pulse" />
-            Listening… {speech.interimTranscript && (
-              <span className="italic text-foreground/70 truncate">
-                "{speech.interimTranscript}"
-              </span>
-            )}
-          </div>
-        )}
-        {speech.sttError && (
-          <div className="px-3 pt-2 text-xs text-destructive flex items-center gap-1">
-            <AlertCircle className="h-3 w-3" />
-            {speech.sttError}
-          </div>
-        )}
         <div className="p-3 flex gap-2 items-end">
           <Textarea
             ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={
-              speech.listening
-                ? 'Listening…'
-                : `Ask Mwalimu about ${subject}...`
-            }
+            placeholder={`Ask Mwalimu about ${subject}...`}
             rows={2}
             className="resize-none min-h-[2.5rem]"
             disabled={busy}
           />
           {speech.sttSupported && (
             <Button
-              variant={speech.listening ? 'destructive' : 'outline'}
+              variant="outline"
               size="icon"
-              onClick={() =>
-                speech.listening ? speech.stopListening() : speech.startListening()
-              }
+              onClick={() => setCallOpen(true)}
               disabled={busy}
-              aria-pressed={speech.listening}
-              aria-label={speech.listening ? 'Stop listening' : 'Start voice input'}
-              title={speech.listening ? 'Stop listening' : 'Speak instead of typing'}
+              aria-label="Start voice call with Mwalimu"
+              title="Call Mwalimu — voice chat"
             >
-              {speech.listening ? (
-                <MicOff className="h-4 w-4" />
-              ) : (
-                <Mic className="h-4 w-4" />
-              )}
+              <Phone className="h-4 w-4" />
             </Button>
           )}
           {busy ? (
@@ -615,6 +603,18 @@ export function SocraticChat({
           )}
         </div>
       </div>
+
+      <CallInterface
+        open={callOpen}
+        onOpenChange={setCallOpen}
+        persona={{
+          name: 'Mwalimu AI',
+          subtitle: `${subject} · ${grade}`,
+          initial: 'M',
+        }}
+        language={language}
+        onUserTurn={(text) => send(text, 'voice')}
+      />
     </Card>
   );
 }
@@ -646,6 +646,15 @@ function MessageBubble({
               : 'bg-muted text-foreground'
           }`}
         >
+          {message.source === 'voice' && (
+            <span
+              className="mr-1.5 inline-flex items-center align-middle opacity-70"
+              title="Spoken during a voice call"
+              aria-label="Voice message"
+            >
+              <MicIcon className="h-3 w-3" />
+            </span>
+          )}
           {message.content || (message.streaming ? '' : ' ')}
           {message.streaming && (
             <span

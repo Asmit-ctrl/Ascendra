@@ -8,6 +8,9 @@
 const requiredEnvVars = [
   'NEXT_PUBLIC_SUPABASE_URL',
   'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+  // Server-side. /api/chat hands this to the Groq SDK; missing or invalid
+  // keys surface as a 502 on the student chat page. Fail the build instead.
+  'GROQ_API_KEY',
 ];
 
 const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
