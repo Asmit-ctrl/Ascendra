@@ -11,6 +11,20 @@ import { useToast } from '@/hooks/use-toast'
 import { curriculumData } from '@/data/curriculum/curriculum-structure'
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/api-config'
 
+// Stopgap teacher identity. Until real auth lands, persist a single ID per
+// browser so the generate (save) and list paths agree. Replace with the
+// authenticated user's ID once auth context is wired in.
+function getTeacherId(): string {
+  if (typeof window === 'undefined') return 'teacher_anon'
+  const KEY = 'syncsenta:teacherId'
+  let id = window.localStorage.getItem(KEY)
+  if (!id) {
+    id = `teacher_${Math.random().toString(36).slice(2, 10)}`
+    window.localStorage.setItem(KEY, id)
+  }
+  return id
+}
+
 export function SchemeOfWorkGenerator() {
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
@@ -105,12 +119,14 @@ Format the scheme as follows:
 
 Make it detailed, practical, and ready for Kenyan teachers to use. Ensure it aligns with KICD CBC standards.`
 
+      const teacherId = getTeacherId()
+
       const response = await fetch(buildApiUrl(API_ENDPOINTS.AGENTS_CHAT), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: prompt,
-          user_id: 'teacher_001',
+          user_id: teacherId,
           session_id: `scheme_${Date.now()}`,
           grade: grade,
           subject: subject,
@@ -134,7 +150,7 @@ Make it detailed, practical, and ready for Kenyan teachers to use. Ensure it ali
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              teacher_id: 'teacher_001', // TODO: Get from auth
+              teacher_id: teacherId, // shared with /agents/chat above
               grade: grade,
               subject: subject,
               term: term,

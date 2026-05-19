@@ -748,8 +748,19 @@ Return STRICT JSON:
             self.logger.info("Scheme saved successfully", scheme_id=scheme["scheme_id"], response_count=len(response.data) if response and hasattr(response, 'data') else 0)
             
         except Exception as exc:
-            self.logger.error("Failed to save scheme", error=str(exc), error_type=type(exc).__name__, scheme_id=scheme.get("scheme_id"))
-            # Don't raise - scheme generation succeeded, just storage failed
+            import traceback
+            self.logger.error(
+                "Failed to save scheme",
+                error=str(exc),
+                error_type=type(exc).__name__,
+                scheme_id=scheme.get("scheme_id"),
+                teacher_id=scheme.get("teacher_id"),
+                table="schemes",
+                traceback=traceback.format_exc(),
+            )
+            # Don't raise - scheme generation succeeded, just storage failed.
+            # Surface the failure in the list result instead by tagging the
+            # scheme; the caller can show it as "saved locally, sync failed".
 
     async def _load_scheme(self, scheme_id: str) -> Optional[Dict[str, Any]]:
         """Load scheme from database."""

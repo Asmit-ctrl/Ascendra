@@ -632,13 +632,17 @@ Please try rephrasing your question, or contact support if the issue persists.
                 "conversation_context": {}
             }
             
-            # Add request metadata to context
+            # Add request metadata to context. user_id doubles as teacher_id
+            # so save/list paths in lesson_architect agree on a single identity
+            # (no auth layer yet — the frontend supplies it).
             initial_state["context"].update({
                 "grade": request.grade,
                 "subject": request.subject,
                 "role": request.role,
                 "type": request.type,
-                "priority": request.priority
+                "priority": request.priority,
+                "user_id": request.user_id,
+                "teacher_id": request.user_id,
             })
             
             # Get or create conversation context
