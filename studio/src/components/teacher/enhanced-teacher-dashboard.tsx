@@ -1,14 +1,26 @@
 "use client"
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { 
   Calendar, FileText, ClipboardList, BookOpen, Users, 
   MessageSquare, Award, Brain, TrendingUp, AlertCircle,
-  BarChart3, Target, Lightbulb, GraduationCap, Sparkles
+  BarChart3, Target, Lightbulb, GraduationCap, Sparkles,
+  LogOut, Settings, User
 } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 
 // Import sub-components
 import { SchemeOfWorkGenerator } from './scheme-of-work-generator'
@@ -22,6 +34,15 @@ import { ProfessionalDevelopment } from './professional-development'
 
 export function EnhancedTeacherDashboard() {
   const [activeTab, setActiveTab] = useState('overview')
+  const router = useRouter()
+
+  const handleLogout = () => {
+    // Clear any teacher-specific data
+    localStorage.removeItem('teacherName')
+    localStorage.removeItem('userAvatar')
+    // Redirect to login
+    router.push('/login')
+  }
 
   return (
     <div className="container mx-auto p-6 max-w-[1600px]">
@@ -37,12 +58,41 @@ export function EnhancedTeacherDashboard() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <Badge variant="outline" className="gap-1">
               <GraduationCap className="h-3 w-3" />
               Grade 4 Mathematics
             </Badge>
             <Badge variant="secondary">Term 2, Week 5</Badge>
+            
+            {/* User Profile Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="flex items-center gap-2 rounded-full h-12 px-4"
+                >
+                  <Avatar className="h-8 w-8">
+                    <AvatarFallback>
+                      <User className="h-4 w-4" />
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="hidden sm:inline">Teacher</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56" align="end">
+                <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem>
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>Settings</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleLogout}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  <span>Log out</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>
