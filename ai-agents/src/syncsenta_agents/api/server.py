@@ -66,9 +66,11 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
+        "https://sentastudio.vercel.app",
+        "https://sentastudio-git-main-dans-projects-5f474b51.vercel.app",
         os.getenv("FRONTEND_URL", "https://sentastudio.vercel.app"),
     ],
-    allow_origin_regex=r"https://([a-z0-9-]+\.)*vercel\.app",
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
