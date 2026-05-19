@@ -675,8 +675,10 @@ Return STRICT JSON:
             return
         
         try:
+            self.logger.info("Attempting to save scheme", scheme_id=scheme.get("scheme_id"), teacher_id=scheme.get("teacher_id"))
+            
             # Save to schemes table
-            self.supabase.table("schemes").insert({
+            response = self.supabase.table("schemes").insert({
                 "scheme_id": scheme["scheme_id"],
                 "title": scheme["title"],
                 "grade": scheme["grade"],
@@ -691,10 +693,10 @@ Return STRICT JSON:
                 "created_at": scheme["created_at"],
             }).execute()
             
-            self.logger.info("Scheme saved", scheme_id=scheme["scheme_id"])
+            self.logger.info("Scheme saved successfully", scheme_id=scheme["scheme_id"], response_count=len(response.data) if response and hasattr(response, 'data') else 0)
             
         except Exception as exc:
-            self.logger.error("Failed to save scheme", error=str(exc))
+            self.logger.error("Failed to save scheme", error=str(exc), error_type=type(exc).__name__, scheme_id=scheme.get("scheme_id"))
             # Don't raise - scheme generation succeeded, just storage failed
 
     async def _load_scheme(self, scheme_id: str) -> Optional[Dict[str, Any]]:
