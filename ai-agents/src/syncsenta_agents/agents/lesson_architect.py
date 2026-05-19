@@ -267,11 +267,14 @@ class LessonArchitectAgent:
                 weeks=len(scheme_rows)
             )
             
+            # Format the scheme as readable text for display
+            scheme_text = self._format_scheme_as_text(scheme)
+            
             return {
                 "agent": "lesson_architect",
                 "action": "generate_scheme",
-                "response": f"Generated {len(scheme_rows)}-week scheme for {grade} {subject} {term}",
-                "scheme": scheme,
+                "response": scheme_text,  # Return full formatted scheme
+                "scheme": scheme,  # Also include structured data
             }
             
         except Exception as exc:
@@ -668,6 +671,55 @@ Return STRICT JSON:
                 "schemes": [],
             }
 
+    def _format_scheme_as_text(self, scheme: Dict[str, Any]) -> str:
+        """Format scheme data as readable text."""
+        lines = []
+        lines.append(f"# SCHEME OF WORK")
+        lines.append(f"**Grade:** {scheme['grade']}")
+        lines.append(f"**Subject:** {scheme['subject']}")
+        lines.append(f"**Term:** {scheme['term']}")
+        lines.append(f"**Duration:** {scheme['total_weeks']} Weeks")
+        lines.append("")
+        
+        for week_data in scheme['rows']:
+            lines.append(f"## Week {week_data.get('week', '?')}: {week_data.get('strand', 'Topic')}")
+            lines.append("")
+            
+            if 'slos' in week_data:
+                lines.append("**Specific Learning Outcomes:**")
+                for slo in week_data['slos']:
+                    lines.append(f"- {slo}")
+                lines.append("")
+            
+            if 'key_inquiry_questions' in week_data:
+                lines.append("**Key Inquiry Questions:**")
+                for kiq in week_data['key_inquiry_questions']:
+                    lines.append(f"- {kiq}")
+                lines.append("")
+            
+            if 'learning_experiences' in week_data:
+                lines.append("**Learning Experiences:**")
+                for exp in week_data['learning_experiences']:
+                    lines.append(f"- {exp}")
+                lines.append("")
+            
+            if 'resources' in week_data:
+                lines.append("**Resources:**")
+                for res in week_data['resources']:
+                    lines.append(f"- {res}")
+                lines.append("")
+            
+            if 'assessment' in week_data:
+                lines.append("**Assessment:**")
+                for assess in week_data['assessment']:
+                    lines.append(f"- {assess}")
+                lines.append("")
+            
+            lines.append("---")
+            lines.append("")
+        
+        return "\n".join(lines)
+    
     async def _save_scheme(self, scheme: Dict[str, Any]) -> None:
         """Save scheme to database."""
         if not self.supabase:
