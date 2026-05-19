@@ -367,9 +367,10 @@ class LessonArchitectAgent:
         mode: SchemeMode,
         language: str,
     ) -> List[Dict[str, Any]]:
-        """Generate individual scheme rows (week-by-week breakdown)."""
+        """Generate individual scheme rows (lesson-by-lesson breakdown for table format)."""
         rows = []
         week_num = 1
+        lesson_num = 1
         
         # For each strand allocated to this term
         for strand_dict in term_allocation:
@@ -380,26 +381,38 @@ class LessonArchitectAgent:
                 continue
                 
             # Get sub-strands for this strand
-            sub_strands = get_sub_strands_for_strand(grade, subject, strand_name)
-            if not sub_strands:
+            sub_strands_list = strand_dict.get("subStrands", [])
+            if not sub_strands_list:
                 self.logger.warning(f"No sub-strands for strand '{strand_name}'")
                 continue
             
             # Generate rows for each sub-strand
-            for sub_strand in sub_strands:
-                # Generate content for this week
-                row = await self._generate_week_content(
-                    week=week_num,
+            for sub_strand in sub_strands_list:
+                sub_strand_name = sub_strand.get("name", "")
+                lessons_for_substrand = sub_strand.get("lessons", 1)
+                
+                # Generate lesson-by-lesson content for this sub-strand
+                lesson_rows = await self._generate_lessons_for_substrand(
                     grade=grade,
                     subject=subject,
                     strand=strand_name,
                     sub_strand=sub_strand,
+                    week_start=week_num,
+                    lesson_start=lesson_num,
                     lessons_per_week=lessons_per_week,
                     language=language,
                 )
                 
-                rows.append(row)
-                week_num += 1
+                rows.extend(lesson_rows)
+                
+                # Update week and lesson counters
+                total_lessons_added = len(lesson_rows)
+                lesson_num += total_lessons_added
+                
+                # Calculate week progression
+                while lesson_num > lessons_per_week:
+                    lesson_num -= lessons_per_week
+                    week_num += 1
                 
                 # Stop at 11-13 weeks (typical term length)
                 if week_num > 13:
@@ -410,7 +423,247 @@ class LessonArchitectAgent:
         
         return rows
 
-    async def _generate_week_content(
+    async def _generate_lessons_for_substrand(
+        self,
+        *,
+        grade: str,
+        subject: str,
+        strand: str,
+        sub_strand: Dict[str, Any],
+        week_start: int,
+        lesson_start: int,
+        lessons_per_week: int,
+        language: str,
+    ) -> List[Dict[str, Any]]:
+        """Generate individual lesson rows for a sub-strand (table format)."""
+        sub_strand_name = sub_strand.get("name", "")
+        learning_outcomes = sub_strand.get("learningOutcomes", [])
+        suggested_experiences = sub_strand.get("suggestedExperiences", [])
+        key_inquiry_question = sub_strand.get("keyInquiryQuestion", "")
+        lessons_count = sub_strand.get("lessons", 1)
+        
+        # Determine if Kiswahili
+        is_kiswahili = "kiswahili" in subject.lower()
+        
+        # Build official KICD context
+        official_context = ""
+        if learning_outcomes:
+            official_context += f"\n\nOFFICIAL KICD LEARNING OUTCOMES for \"{sub_strand_name}\":\n"
+            for i, outcome in enumerate(learning_outcomes):
+                official_context += f"  {chr(97 + i)}) {outcome}\n"
+        
+        if key_inquiry_question:
+            official_context += f"\nOFFICIAL KEY INQUIRY QUESTION: \"{key_inquiry_question}\"\n"
+        
+        if suggested_experiences:
+            official_context += f"\nOFFICIAL SUGGESTED LEARNING EXPERIENCES:\n"
+            for exp in suggested_experiences:
+                official_context += f"  - {exp}\n"
+        
+        # Select system prompt based on language
+        system_prompt = _SYSTEM_PROMPT_SW if is_kiswahili else _SYSTEM_PROMPT_EN
+        
+        # Build user prompt for generating lesson rows (table format)
+        if is_kiswahili:
+            prompt = f"""Tengeneza masomo {lessons_count} ya mpango wa kazi wa CBC kwa mada ndogo hii.
+
+Gredi: {grade}
+Somo: {subject}
+Mada: {strand}
+Mada Ndogo: {sub_strand_name}
+Idadi ya masomo: {lessons_count}
+{official_context}
+
+Kwa kila somo, tengeneza:
+1. Matokeo Maalum ya Somo (3 matokeo katika mpangilio wa KSA: a) Maarifa, b) Ujuzi, c) Mitazamo)
+2. Shughuli za Kujifunza (shughuli moja mahususi kwa somo hili)
+3. Swali Dadisi Muhimu (swali moja kwa somo)
+4. Rasilimali (orodha ya vifaa vinavyohitajika)
+5. Tathmini (njia za kutathmini)
+
+KANUNI MUHIMU:
+- Kila somo liwe TOFAUTI - usizidishe maudhui
+- Tumia vitenzi vya KSA: {', '.join(list(self.knowledge_verbs | self.skills_verbs | self.attitudes_verbs)[:10])}
+- USITUMIE vitenzi dhaifu: {', '.join(list(self.banned_verbs)[:5])}
+- Tumia mifano ya Kenya: matatu, shamba, M-Pesa, ugali, shilingi
+- Oanisha na matokeo rasmi ya KICD
+
+Rudisha JSON array ya masomo {lessons_count}:
+[
+  {{
+    "week": 0,
+    "lesson": 0,
+    "strand": "{strand}",
+    "subStrand": "{sub_strand_name}",
+    "specificLearningOutcome": "**Kufikia mwisho wa somo mwanafunzi aweze:**\\n-[Maarifa]\\n-[Ujuzi]\\n-[Mitazamo]",
+    "learningExperiences": "**Mwanafunzi aweze:-**\\n-[shughuli 1]\\n-[shughuli 2]\\n-[shughuli 3]\\n-[shughuli 4]",
+    "keyInquiryQuestion": "Swali dadisi",
+    "learningResources": "Rasilimali 1, Rasilimali 2",
+    "assessmentMethods": "Njia ya tathmini",
+    "reflection": ""
+  }}
+]
+"""
+        else:
+            prompt = f"""Generate {lessons_count} individual lesson rows for CBC scheme of work (table format).
+
+Grade: {grade}
+Subject: {subject}
+Strand: {strand}
+Sub-Strand: {sub_strand_name}
+Number of lessons: {lessons_count}
+{official_context}
+
+For EACH lesson, generate:
+1. Specific Learning Outcome (EXACTLY 3 outcomes in strict KSA order)
+   - Format: "By the end of the lesson, the learner should be able to:\\na) [Knowledge verb] ...\\nb) [Skills verb] ...\\nc) [Attitudes verb] ..."
+2. Learning Experiences (EXACTLY 4 activities in format: "Learner is guided to:\\na) ...\\nb) ...\\nc) ...\\nd) ...")
+3. Key Inquiry Question (ONE thought-provoking question per lesson)
+4. Learning Resources (comma-separated list of SPECIFIC resources)
+5. Assessment Methods (comma-separated methods)
+
+CRITICAL RULES:
+- Each lesson must be UNIQUE - no repeated content
+- Use ONLY KSA verbs: {', '.join(list(self.knowledge_verbs)[:8])} (Knowledge), {', '.join(list(self.skills_verbs)[:8])} (Skills), {', '.join(list(self.attitudes_verbs)[:8])} (Attitudes)
+- NEVER use banned verbs: {', '.join(list(self.banned_verbs)[:8])}
+- Use Kenyan context: matatu, shamba, M-Pesa, ugali, shillings
+- Align with KICD outcomes above
+- Resources must be SPECIFIC (not generic "textbook" or "chart")
+
+Return JSON array of {lessons_count} lesson objects:
+[
+  {{
+    "week": 0,
+    "lesson": 0,
+    "strand": "{strand}",
+    "subStrand": "{sub_strand_name}",
+    "specificLearningOutcome": "By the end of the lesson, the learner should be able to:\\na) [Knowledge outcome]\\nb) [Skills outcome]\\nc) [Attitudes outcome]",
+    "learningExperiences": "Learner is guided to:\\na) [Knowledge activity]\\nb) [Skills activity]\\nc) [Application activity]\\nd) [Attitudes activity]",
+    "keyInquiryQuestion": "Question for this lesson",
+    "learningResources": "KLB Visionary {subject} {grade} pages X-Y, specific resource 2, specific resource 3",
+    "assessmentMethods": "Oral questions, observation, written exercise",
+    "reflection": ""
+  }}
+]
+"""
+        
+        # Generate with LLM
+        raw = await self._provider().generate(prompt, system=system_prompt)
+        
+        # Parse JSON array with robust extraction
+        lesson_rows = self._extract_json_array(raw)
+        
+        # Validate and fix each lesson row
+        current_week = week_start
+        current_lesson = lesson_start
+        
+        validated_rows = []
+        for row in lesson_rows[:lessons_count]:  # Only take requested number
+            # Set week and lesson numbers
+            row["week"] = current_week
+            row["lesson"] = current_lesson
+            row["strand"] = strand
+            row["subStrand"] = sub_strand_name
+            
+            # Validate and enforce rules
+            row = self._validate_lesson_row(row, is_kiswahili, grade, subject)
+            
+            validated_rows.append(row)
+            
+            # Increment lesson counter
+            current_lesson += 1
+            if current_lesson > lessons_per_week:
+                current_lesson = 1
+                current_week += 1
+        
+        return validated_rows
+    
+    def _extract_json_array(self, raw: str) -> List[Dict[str, Any]]:
+        """Extract JSON array from LLM response."""
+        cleaned = raw.strip()
+        
+        # Remove markdown code fences
+        if cleaned.startswith("```"):
+            cleaned = cleaned.replace("```json", "").replace("```", "").strip()
+        
+        # Try direct parse first
+        try:
+            result = json.loads(cleaned)
+            if isinstance(result, list):
+                return result
+            elif isinstance(result, dict):
+                return [result]  # Single object, wrap in array
+        except json.JSONDecodeError:
+            pass
+        
+        # Try to find JSON array in response
+        import re
+        match = re.search(r'\[.*\]', cleaned, re.DOTALL)
+        if match:
+            try:
+                result = json.loads(match.group(0))
+                if isinstance(result, list):
+                    return result
+            except json.JSONDecodeError:
+                pass
+        
+        # Last resort: try to fix common issues
+        try:
+            # Remove trailing commas
+            fixed = re.sub(r',\s*}', '}', cleaned)
+            fixed = re.sub(r',\s*]', ']', fixed)
+            result = json.loads(fixed)
+            if isinstance(result, list):
+                return result
+            elif isinstance(result, dict):
+                return [result]
+        except json.JSONDecodeError as e:
+            raise AgentError(f"LLM did not return valid JSON array: {e}\nRaw response: {raw[:200]}")
+    
+    def _validate_lesson_row(
+        self,
+        row: Dict[str, Any],
+        is_kiswahili: bool,
+        grade: str,
+        subject: str,
+    ) -> Dict[str, Any]:
+        """Validate and enforce CBC rules on a single lesson row."""
+        # Ensure required fields
+        row.setdefault("week", 1)
+        row.setdefault("lesson", 1)
+        row.setdefault("strand", "")
+        row.setdefault("subStrand", "")
+        row.setdefault("specificLearningOutcome", "")
+        row.setdefault("learningExperiences", "")
+        row.setdefault("keyInquiryQuestion", "What did we learn today?")
+        row.setdefault("learningResources", f"KLB Visionary {subject} {grade}")
+        row.setdefault("assessmentMethods", "Oral questions, observation")
+        row.setdefault("reflection", "")
+        
+        # Validate SLO format
+        slo = row["specificLearningOutcome"]
+        if slo:
+            # Check for banned verbs
+            slo_lower = slo.lower()
+            for banned in self.banned_verbs:
+                if banned in slo_lower:
+                    self.logger.warning(f"Banned verb '{banned}' in lesson row", week=row["week"], lesson=row["lesson"])
+                    slo = slo.replace(banned, "identify")
+            
+            row["specificLearningOutcome"] = slo
+        
+        # Validate learning experiences format
+        exp = row["learningExperiences"]
+        if exp:
+            exp_lower = exp.lower()
+            # Check for passive language
+            for passive in ["learn about", "know about", "understand"]:
+                if passive in exp_lower:
+                    exp = exp.replace(passive, "explore" if passive == "learn about" else "identify")
+            
+            row["learningExperiences"] = exp
+        
+        return row
         self,
         *,
         week: int,
@@ -927,124 +1180,52 @@ Return STRICT JSON:
             }
 
     def _format_scheme_as_text(self, scheme: Dict[str, Any]) -> str:
-        """Format scheme data as readable markdown text (matching scheme-scribe-ai format)."""
+        """Format scheme data as a table (matching scheme-scribe-ai table format)."""
         lines = []
         
         # Header
         is_kiswahili = "kiswahili" in scheme.get('subject', '').lower()
         
         if is_kiswahili:
-            lines.append(f"# MPANGO WA KAZI")
-            lines.append(f"**Gredi:** {scheme['grade']}")
-            lines.append(f"**Somo:** {scheme['subject']}")
-            lines.append(f"**Muhula:** {scheme['term']}")
-            lines.append(f"**Muda:** Wiki {scheme['total_weeks']}")
-            lines.append(f"**Masomo kwa Wiki:** {scheme['lessons_per_week']}")
+            lines.append(f"# MPANGO WA KAZI - {scheme['grade']} {scheme['subject']} - {scheme['term']}")
         else:
-            lines.append(f"# SCHEME OF WORK")
-            lines.append(f"**Grade:** {scheme['grade']}")
-            lines.append(f"**Subject:** {scheme['subject']}")
-            lines.append(f"**Term:** {scheme['term']}")
-            lines.append(f"**Duration:** {scheme['total_weeks']} Weeks")
-            lines.append(f"**Lessons per Week:** {scheme['lessons_per_week']}")
+            lines.append(f"# SCHEME OF WORK - {scheme['grade']} {scheme['subject']} - {scheme['term']}")
         
         lines.append("")
-        lines.append("---")
+        lines.append(f"**Total Lessons:** {len(scheme['rows'])}")
+        lines.append(f"**Lessons per Week:** {scheme['lessons_per_week']}")
         lines.append("")
         
-        # Week-by-week breakdown
-        for week_data in scheme['rows']:
-            week_num = week_data.get('week', '?')
-            strand = week_data.get('strand', 'Topic')
-            sub_strand = week_data.get('sub_strand', '')
+        # Table headers
+        if is_kiswahili:
+            headers = ["WIKI", "SOMO", "MADA", "MADA NDOGO", "MATOKEO MAALUM", "SHUGHULI ZA KUJIFUNZA", "SWALI DADISI", "RASILIMALI", "TATHMINI", "MAONI"]
+        else:
+            headers = ["WK", "LSN", "Strand", "Sub-Strand", "Lesson Learning Outcomes", "Lesson Learning Experiences", "Key Inquiry Question", "Learning Resources", "Assessment", "Refl"]
+        
+        # Create table separator
+        separator = "|" + "|".join(["---" for _ in headers]) + "|"
+        header_row = "|" + "|".join(headers) + "|"
+        
+        lines.append(header_row)
+        lines.append(separator)
+        
+        # Table rows
+        for row in scheme['rows']:
+            week = str(row.get('week', ''))
+            lesson = str(row.get('lesson', ''))
+            strand = row.get('strand', '')
+            sub_strand = row.get('subStrand', '')
+            slo = row.get('specificLearningOutcome', '').replace('\n', '<br>')
+            experiences = row.get('learningExperiences', '').replace('\n', '<br>')
+            kiq = row.get('keyInquiryQuestion', '').replace('\n', ' ')
+            resources = row.get('learningResources', '').replace('\n', ', ')
+            assessment = row.get('assessmentMethods', '').replace('\n', ', ')
+            reflection = row.get('reflection', '')
             
-            if is_kiswahili:
-                lines.append(f"## Wiki {week_num}: {strand}")
-                if sub_strand:
-                    lines.append(f"**Mada Ndogo:** {sub_strand}")
-            else:
-                lines.append(f"## Week {week_num}: {strand}")
-                if sub_strand:
-                    lines.append(f"**Sub-Strand:** {sub_strand}")
-            
-            lines.append("")
-            
-            # Specific Learning Outcomes
-            slos = week_data.get('specific_learning_outcomes', [])
-            if slos:
-                if is_kiswahili:
-                    lines.append("### Matokeo Maalum Yanayotarajiwa")
-                else:
-                    lines.append("### Specific Learning Outcomes")
-                
-                for slo in slos:
-                    lines.append(f"- {slo}")
-                lines.append("")
-            
-            # Key Inquiry Questions
-            kiqs = week_data.get('key_inquiry_questions', [])
-            if kiqs:
-                if is_kiswahili:
-                    lines.append("### Maswali Dadisi Muhimu")
-                else:
-                    lines.append("### Key Inquiry Questions")
-                
-                for kiq in kiqs:
-                    lines.append(f"- {kiq}")
-                lines.append("")
-            
-            # Learning Experiences
-            experiences = week_data.get('learning_experiences', [])
-            if experiences:
-                if is_kiswahili:
-                    lines.append("### Shughuli za Kujifunza")
-                else:
-                    lines.append("### Learning Experiences")
-                
-                for i, exp in enumerate(experiences, 1):
-                    if is_kiswahili:
-                        lines.append(f"**Somo {i}:** {exp}")
-                    else:
-                        lines.append(f"**Lesson {i}:** {exp}")
-                lines.append("")
-            
-            # Resources
-            resources = week_data.get('resources', [])
-            if resources:
-                if is_kiswahili:
-                    lines.append("### Rasilimali")
-                else:
-                    lines.append("### Learning Resources")
-                
-                for resource in resources:
-                    lines.append(f"- {resource}")
-                lines.append("")
-            
-            # Assessment
-            assessment = week_data.get('assessment', [])
-            if assessment:
-                if is_kiswahili:
-                    lines.append("### Tathmini")
-                else:
-                    lines.append("### Assessment Methods")
-                
-                for method in assessment:
-                    lines.append(f"- {method}")
-                lines.append("")
-            
-            # Reflection
-            reflection = week_data.get('reflection', '')
-            if reflection:
-                if is_kiswahili:
-                    lines.append("### Maoni ya Mwalimu")
-                    lines.append(f"*{reflection}*")
-                else:
-                    lines.append("### Teacher Reflection")
-                    lines.append(f"*{reflection}*")
-                lines.append("")
-            
-            lines.append("---")
-            lines.append("")
+            table_row = f"|{week}|{lesson}|{strand}|{sub_strand}|{slo}|{experiences}|{kiq}|{resources}|{assessment}|{reflection}|"
+            lines.append(table_row)
+        
+        lines.append("")
         
         # Footer
         if is_kiswahili:
