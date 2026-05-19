@@ -65,13 +65,14 @@ export function AppHeader() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
-              variant="ghost"
-              className="relative h-10 w-10 rounded-full"
+              variant="outline"
+              className="flex items-center gap-2 rounded-full h-12 px-4 bg-background/80 border-border text-foreground hover:bg-muted hover:border-border/80"
             >
-              <Avatar className="h-10 w-10">
+              <Avatar className="h-8 w-8">
                 <AvatarImage src={userAvatar || undefined} alt="User Avatar" />
                 <AvatarFallback>{userName.charAt(0).toUpperCase()}</AvatarFallback>
               </Avatar>
+              <span className="hidden sm:inline">Profile</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-56" align="end" forceMount>
