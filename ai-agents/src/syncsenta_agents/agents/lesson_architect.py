@@ -300,11 +300,17 @@ class LessonArchitectAgent:
         week_num = 1
         
         # For each strand allocated to this term
-        for strand_name in term_allocation:
+        for strand_dict in term_allocation:
+            # Extract strand name from dict
+            strand_name = strand_dict.get("strandName") or strand_dict.get("name")
+            if not strand_name:
+                self.logger.warning(f"No strand name in {strand_dict}")
+                continue
+                
             # Get sub-strands for this strand
             sub_strands = get_sub_strands_for_strand(grade, subject, strand_name)
             if not sub_strands:
-                self.logger.warning(f"No sub-strands for {strand_name}")
+                self.logger.warning(f"No sub-strands for strand '{strand_name}'")
                 continue
             
             # Generate rows for each sub-strand
