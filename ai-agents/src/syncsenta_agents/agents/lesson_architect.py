@@ -625,14 +625,15 @@ Return STRICT JSON:
         """List schemes for a teacher."""
         try:
             if not self.supabase:
+                self.logger.warning("Database not configured - returning empty schemes list")
                 return {
                     "agent": "lesson_architect",
                     "action": "list_schemes",
-                    "response": "Database not configured",
+                    "response": "Database not configured. Please set SUPABASE_URL and SUPABASE_SERVICE_KEY environment variables to enable scheme storage.",
                     "schemes": [],
                 }
             
-            # Query schemes from database
+            # Query schemes from database (Supabase execute() is synchronous)
             query = self.supabase.table("schemes").select("*").eq("teacher_id", teacher_id)
             
             if grade:
@@ -640,8 +641,15 @@ Return STRICT JSON:
             if subject:
                 query = query.eq("subject", subject)
             
-            result = await query.execute()
-            schemes = result.data if result else []
+            # Execute query synchronously - do NOT await
+            response = query.execute()
+            
+            # Extract data from response
+            schemes = []
+            if response and hasattr(response, 'data'):
+                schemes = response.data or []
+            
+            self.logger.info("Listed schemes", count=len(schemes), teacher_id=teacher_id)
             
             return {
                 "agent": "lesson_architect",
@@ -651,8 +659,14 @@ Return STRICT JSON:
             }
             
         except Exception as exc:
-            self.logger.error("List schemes failed", error=str(exc))
-            raise AgentError(f"List schemes failed: {exc}") from exc
+            self.logger.error("List schemes failed", error=str(exc), error_type=type(exc).__name__)
+            # Return empty list instead of crashing
+            return {
+                "agent": "lesson_architect",
+                "action": "list_schemes",
+                "response": f"Failed to list schemes: {str(exc)}",
+                "schemes": [],
+            }
 
     async def _save_scheme(self, scheme: Dict[str, Any]) -> None:
         """Save scheme to database."""
@@ -662,7 +676,7 @@ Return STRICT JSON:
         
         try:
             # Save to schemes table
-            await self.supabase.table("schemes").insert({
+            self.supabase.table("schemes").insert({
                 "scheme_id": scheme["scheme_id"],
                 "title": scheme["title"],
                 "grade": scheme["grade"],
@@ -690,10 +704,11 @@ Return STRICT JSON:
             return None
         
         try:
-            result = await self.supabase.table("schemes").select("*").eq("scheme_id", scheme_id).execute()
+            # Execute query synchronously - do NOT await
+            response = self.supabase.table("schemes").select("*").eq("scheme_id", scheme_id).execute()
             
-            if result and result.data:
-                return result.data[0]
+            if response and hasattr(response, 'data') and response.data:
+                return response.data[0]
             
             return None
             
@@ -708,7 +723,7 @@ Return STRICT JSON:
             return
         
         try:
-            await self.supabase.table("lesson_plans").insert(lesson_plan).execute()
+            self.supabase.table("lesson_plans").insert(lesson_plan).execute()
             self.logger.info("Lesson plan saved", lesson_plan_id=lesson_plan["lesson_plan_id"])
             
         except Exception as exc:

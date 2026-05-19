@@ -12,6 +12,21 @@ def main() -> None:
     configure_logging(debug=config.debug)
     logger = get_logger("main")
     
+    # Check Supabase configuration
+    import os
+    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_key = os.getenv("SUPABASE_SERVICE_KEY")
+    
+    if not supabase_url or not supabase_key:
+        logger.warning(
+            "Supabase credentials not configured. Database features will be disabled.",
+            missing_url=not supabase_url,
+            missing_key=not supabase_key,
+            help="Set SUPABASE_URL and SUPABASE_SERVICE_KEY environment variables to enable database features."
+        )
+    else:
+        logger.info("Supabase credentials found - database features enabled")
+    
     logger.info(
         "Starting SyncSenta AI Agents FastAPI server",
         environment=config.environment,

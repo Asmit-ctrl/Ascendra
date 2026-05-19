@@ -41,12 +41,10 @@ class SyncSentaOrchestrator:
             )
             # Tutoring_Agent — registered under "socratic_tutor" so the
             # existing workflow routing slot picks it up for student questions.
-            from ..db.supabase_client import get_supabase_client
-            try:
-                supabase = get_supabase_client()
-            except ValueError:
+            from ..db.supabase_client import try_get_supabase_client
+            supabase = try_get_supabase_client()
+            if not supabase:
                 self.logger.warning("Supabase not configured - agents will run without database")
-                supabase = None
             
             self.workflow_orchestrator.register_agent(
                 "socratic_tutor", TutoringAgent(supabase_client=supabase)
