@@ -167,7 +167,9 @@ class LessonArchitectAgent:
         text = request.lower()
         if any(k in text for k in ("lesson plan", "plan for lesson", "lesson for")):
             return "generate_lesson_plan"
-        if any(k in text for k in ("list", "show", "my schemes")):
+        # Only match "list" when it's clearly asking to list/show existing schemes
+        # Don't match when "list" appears in "list of items" or "list values"
+        if any(k in text for k in ("list schemes", "show schemes", "my schemes", "list my", "show my")):
             return "list_schemes"
         return "generate_scheme"
 
