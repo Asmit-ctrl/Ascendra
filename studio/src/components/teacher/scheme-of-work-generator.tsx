@@ -127,6 +127,33 @@ Make it detailed, practical, and ready for Kenyan teachers to use. Ensure it ali
       
       if (data.success && data.response) {
         setGeneratedScheme(data.response)
+        
+        // Save the scheme to database
+        try {
+          const saveResponse = await fetch(buildApiUrl('/lesson-architect/schemes'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              teacher_id: 'teacher_001', // TODO: Get from auth
+              grade: grade,
+              subject: subject,
+              term: term,
+              title: `${grade} ${subject} - ${term} Scheme of Work`,
+              content: data.response,
+              mode: 'standard',
+              language: 'english'
+            })
+          })
+          
+          if (saveResponse.ok) {
+            const saveData = await saveResponse.json()
+            console.log('Scheme saved:', saveData.scheme_id)
+          }
+        } catch (saveError) {
+          console.error('Failed to save scheme:', saveError)
+          // Don't show error to user - scheme was generated successfully
+        }
+        
         toast({
           title: 'Scheme of Work Generated!',
           description: '13-week scheme ready for review',
