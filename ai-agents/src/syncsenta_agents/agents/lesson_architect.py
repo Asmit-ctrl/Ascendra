@@ -391,7 +391,7 @@ Return STRICT JSON:
   "key_inquiry_questions": ["KIQ 1", "KIQ 2", "KIQ 3"],
   "learning_experiences": ["Activity 1", "Activity 2", ...],
   "resources": ["Resource 1", "Resource 2", ...],
-  "assessment": "Assessment strategy",
+  "assessment": ["Assessment method 1", "Assessment method 2"],
   "reflection": "Reflection prompt"
 }}
 """
@@ -432,7 +432,14 @@ Return STRICT JSON:
         data.setdefault("key_inquiry_questions", [])
         data.setdefault("learning_experiences", [])
         data.setdefault("resources", [])
-        data.setdefault("assessment", "")
+        
+        # Assessment can be string or list - normalize to list
+        assessment = data.get("assessment", "")
+        if isinstance(assessment, str):
+            data["assessment"] = [assessment] if assessment else []
+        elif not isinstance(assessment, list):
+            data["assessment"] = []
+            
         data.setdefault("reflection", "")
         
         # Check for banned verbs in SLOs
