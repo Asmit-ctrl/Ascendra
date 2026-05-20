@@ -281,42 +281,52 @@ class LessonArchitectAgent:
                 mode=mode
             )
             
-            # Validate curriculum exists
+            # Look up curated curriculum data if available; otherwise let the AI
+            # generate a fresh scheme from scratch. The registry is optional
+            # guardrails, not a gate — generation should never be blocked by a
+            # missing entry.
             curriculum_key = f"{grade}|{subject}"
-            if curriculum_key not in CURRICULUM_REGISTRY:
-                # Try alternative formats
-                alt_keys = [
-                    f"{grade}|{subject}",
-                    f"Grade {grade.split()[-1]}|{subject}",  # "Grade 4" from "grade-4"
+            registry_hit = curriculum_key in CURRICULUM_REGISTRY
+            if not registry_hit:
+                for alt_key in (
+                    f"Grade {grade.split()[-1]}|{subject}",
                     f"{grade.replace('Grade ', 'Grade')}|{subject}",
-                ]
-                
-                found_key = None
-                for key in alt_keys:
-                    if key in CURRICULUM_REGISTRY:
-                        found_key = key
-                        curriculum_key = key
+                ):
+                    if alt_key in CURRICULUM_REGISTRY:
+                        curriculum_key = alt_key
+                        registry_hit = True
                         break
-                
-                if not found_key:
-                    available = list(CURRICULUM_REGISTRY.keys())[:10]
-                    raise AgentError(
-                        f"No curriculum data for '{grade}' '{subject}'. "
-                        f"Available (sample): {available}. "
-                        f"Tried keys: {alt_keys}"
-                    )
-            
-            # Get curriculum data
-            strands = get_hardcoded_strands(grade, subject)
-            if not strands:
-                raise AgentError(f"No strands found for {grade} {subject}")
-            
+
+            strands = get_hardcoded_strands(grade, subject) if registry_hit else None
             lessons_per_week = get_lessons_per_week(grade, subject)
-            
-            # Get term allocation
-            term_allocation = get_term_allocation(grade, subject, term)
+            term_allocation = (
+                get_term_allocation(grade, subject, term) if registry_hit else None
+            )
+
             if not term_allocation:
-                raise AgentError(f"No term allocation for {grade} {subject} {term}")
+                # No curated data — synthesize a minimal scaffold so the LLM
+                # produces strand/sub-strand content end-to-end. Each placeholder
+                # sub-strand has `lessons` set so the row generator paces a full
+                # term; the LLM fills in actual SLOs, KIQs, experiences, etc.
+                self.logger.warning(
+                    "No curriculum data — generating scheme from scratch",
+                    grade=grade,
+                    subject=subject,
+                    term=term,
+                )
+                total_lessons = lessons_per_week * 12  # ~12 weeks per term
+                # Spread across 3 strand placeholders, 2 sub-strands each
+                per_substrand = max(1, total_lessons // 6)
+                term_allocation = [
+                    {
+                        "strandName": f"{subject} Strand {s}",
+                        "subStrands": [
+                            {"name": f"Sub-strand {s}.{ss}", "lessons": per_substrand}
+                            for ss in range(1, 3)
+                        ],
+                    }
+                    for s in range(1, 4)
+                ]
             
             # Generate scheme rows
             scheme_rows = await self._generate_scheme_rows(
