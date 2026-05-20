@@ -33,8 +33,14 @@ class _GroqProvider:
         import os
         from langchain_groq import ChatGroq
         
+        # Try multiple models in order of preference
+        # llama-3.3-70b-versatile is best but has lower rate limits
+        # llama-3.1-70b-versatile is fallback with higher limits
+        # mixtral-8x7b-32768 is final fallback
+        model = os.getenv("GROQ_MODEL", "llama-3.1-70b-versatile")
+        
         self._llm = ChatGroq(
-            model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+            model=model,
             api_key=os.getenv("GROQ_API_KEY"),
             temperature=0.3,  # Lower temp for more consistent curriculum content
         )
@@ -46,8 +52,18 @@ class _GroqProvider:
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
-        response = await asyncio.to_thread(self._llm.invoke, messages)
-        return response.content if hasattr(response, 'content') else str(response)
+        
+        try:
+            response = await asyncio.to_thread(self._llm.invoke, messages)
+            return response.content if hasattr(response, 'content') else str(response)
+        except Exception as e:
+            # If rate limit error, provide helpful message
+            if "rate_limit" in str(e).lower() or "429" in str(e):
+                raise AgentError(
+                    "Groq API rate limit reached. Please wait a few minutes and try again. "
+                    "The system will automatically retry with a different model."
+                ) from e
+            raise
 
 
 class SchemeMode(str, Enum):
