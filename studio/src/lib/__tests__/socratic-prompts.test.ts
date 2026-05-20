@@ -93,6 +93,56 @@ describe('buildSocraticSystemPrompt', () => {
     });
     expect(prompt).toContain('Student name: the student');
   });
+
+  it('injects a Creative Activities scope block that excludes arithmetic', () => {
+    const prompt = buildSocraticSystemPrompt({
+      grade: 'Grade 1',
+      subject: 'Creative Activities',
+    });
+    expect(prompt).toMatch(/SUBJECT SCOPE/);
+    expect(prompt).toMatch(/IN SCOPE/);
+    expect(prompt).toMatch(/OUT OF SCOPE/);
+    expect(prompt).toMatch(/arithmetic.*Mathematics/i);
+    expect(prompt).toMatch(/REDIRECT PROTOCOL/);
+  });
+
+  it('injects a Mathematics scope block that excludes pure drawing', () => {
+    const prompt = buildSocraticSystemPrompt({
+      grade: 'Grade 4',
+      subject: 'Mathematics',
+    });
+    expect(prompt).toMatch(/SUBJECT SCOPE/);
+    expect(prompt).toMatch(/drawing.*Creative Activities/i);
+  });
+
+  it('normalises subject keys (case + dashes) when matching scope', () => {
+    const dashed = buildSocraticSystemPrompt({
+      grade: 'Grade 1',
+      subject: 'creative-activities',
+    });
+    const upper = buildSocraticSystemPrompt({
+      grade: 'Grade 1',
+      subject: 'CREATIVE ACTIVITIES',
+    });
+    expect(dashed).toMatch(/SUBJECT SCOPE/);
+    expect(upper).toMatch(/SUBJECT SCOPE/);
+  });
+
+  it('omits the scope block for unknown subjects (graceful fallback)', () => {
+    const prompt = buildSocraticSystemPrompt({
+      grade: 'Grade 4',
+      subject: 'Astrophysics 101',
+    });
+    expect(prompt).not.toMatch(/SUBJECT SCOPE/);
+  });
+
+  it('forbids silent subject-switching in the hard rules', () => {
+    const prompt = buildSocraticSystemPrompt({
+      grade: 'Grade 1',
+      subject: 'Creative Activities',
+    });
+    expect(prompt).toMatch(/never silently teach the other subject/i);
+  });
 });
 
 describe('buildCompassSystemPrompt', () => {
