@@ -22,6 +22,11 @@ from ..curriculum import (
     CURRICULUM_REGISTRY,
 )
 from ..curriculum.term_mappings import get_term_allocation
+from .scheme.batched import (
+    NoOfficialDataError,
+    RateLimitError,
+    generate_for_sub_strand,
+)
 
 
 class LLMProvider(Protocol):
@@ -467,13 +472,71 @@ class LessonArchitectAgent:
         lessons_per_week: int,
         language: str,
     ) -> List[Dict[str, Any]]:
-        """Generate individual lesson rows for a sub-strand (table format)."""
+        """Generate individual lesson rows for a sub-strand (table format).
+
+        Delegates to ``agents.scheme.batched.generate_for_sub_strand``, which
+        is the verbatim port of scheme-scribe-ai's ``generateForSubStrand``:
+        batched at ``MAX_LESSONS_PER_BATCH=5`` to dodge LLM JSON truncation,
+        with all 12 KICD guardrails applied at the end. Rate-limit and
+        no-official-data errors propagate up so the caller can return partial
+        rows.
+        """
+        is_kiswahili = "kiswahili" in subject.lower()
+        try:
+            result = await generate_for_sub_strand(
+                self._provider(),
+                grade=grade,
+                subject=subject,
+                strand=strand,
+                sub_strand=sub_strand,  # type: ignore[arg-type]
+                is_sw=is_kiswahili,
+                week_start=week_start,
+                lessons_per_week=lessons_per_week,
+                additional_info=None,
+                # Soft-fallback to synthesized context — workspace CLAUDE.md
+                # treats CURRICULUM_REGISTRY as optional guardrails, not a gate.
+                allow_synthetic_context=True,
+            )
+        except RateLimitError as exc:
+            self.logger.warning(
+                "Rate limited generating sub-strand",
+                sub_strand=sub_strand.get("name"),
+            )
+            raise AgentError(
+                "Groq API rate limit reached. Please wait a few minutes and try again."
+            ) from exc
+        except NoOfficialDataError as exc:
+            self.logger.warning(
+                "No official KICD data for sub-strand",
+                sub_strand=sub_strand.get("name"),
+            )
+            raise AgentError(str(exc)) from exc
+
+        return result["rows"]
+
+    # NOTE: The block below (the original per-substrand LLM prompt and JSON
+    # parsing) is retained as dead reference until Phase 2 (lesson plans) ships.
+    # The active path is `_generate_lessons_for_substrand` above which delegates
+    # to the ported batched generator. Delete this stub after Phase 2 lands.
+    async def _legacy_generate_lessons_for_substrand_unused(
+        self,
+        *,
+        grade: str,
+        subject: str,
+        strand: str,
+        sub_strand: Dict[str, Any],
+        week_start: int,
+        lesson_start: int,
+        lessons_per_week: int,
+        language: str,
+    ) -> List[Dict[str, Any]]:
+        """[DEPRECATED] Original per-substrand generator. See note above."""
         sub_strand_name = sub_strand.get("name", "")
         learning_outcomes = sub_strand.get("learningOutcomes", [])
         suggested_experiences = sub_strand.get("suggestedExperiences", [])
         key_inquiry_question = sub_strand.get("keyInquiryQuestion", "")
         lessons_count = sub_strand.get("lessons", 1)
-        
+
         # Determine if Kiswahili
         is_kiswahili = "kiswahili" in subject.lower()
         
@@ -700,60 +763,94 @@ Return JSON array of {lessons_count} lesson objects:
     async def generate_lesson_plan(
         self,
         *,
-        scheme_id: str,
         week: int,
         lesson: int,
         teacher_id: str,
+        scheme_id: Optional[str] = None,
+        row: Optional[Dict[str, Any]] = None,
+        grade: Optional[str] = None,
+        subject: Optional[str] = None,
+        term: Optional[str] = None,
+        additional_notes: Optional[str] = None,
         language: str = "english",
     ) -> Dict[str, Any]:
-        """Generate a detailed lesson plan from a scheme."""
+        """Generate a detailed lesson plan.
+
+        Two calling shapes are supported:
+          1. ``row`` is provided directly (preferred — the studio passes the
+             selected SchemeRow). ``grade``/``subject``/``term`` come along
+             as separate kwargs.
+          2. ``scheme_id`` only — falls back to loading the scheme from
+             Supabase and picking ``rows[week - 1]``. Requires the scheme
+             to have been saved.
+        """
         try:
             self.logger.info(
                 "Generating lesson plan",
                 scheme_id=scheme_id,
                 week=week,
-                lesson=lesson
+                lesson=lesson,
+                has_row=bool(row),
             )
-            
-            # Load scheme from database
-            scheme = await self._load_scheme(scheme_id)
-            if not scheme:
-                raise AgentError(f"Scheme not found: {scheme_id}")
-            
-            # Get the specific week's content
-            rows = scheme.get("rows", [])
-            if week < 1 or week > len(rows):
-                raise AgentError(f"Week {week} not found in scheme (has {len(rows)} weeks)")
-            
-            week_content = rows[week - 1]
-            
-            # Generate lesson plan using week content as guardrail
+
+            scheme: Dict[str, Any] = {}
+            if row is not None:
+                # Direct row path — no DB lookup needed. Build a minimal
+                # scheme dict so _generate_lesson_plan_content has the
+                # grade/subject/term context it needs.
+                scheme = {
+                    "grade": grade or "",
+                    "subject": subject or "",
+                    "term": term or "",
+                    "rows": [row],
+                    "lessons_per_week": 5,
+                }
+                week_content = row
+            else:
+                if not scheme_id:
+                    raise AgentError("Either row or scheme_id must be provided")
+                loaded = await self._load_scheme(scheme_id)
+                if not loaded:
+                    raise AgentError(f"Scheme not found: {scheme_id}")
+                scheme = loaded
+                rows = scheme.get("rows", [])
+                if week < 1 or week > len(rows):
+                    raise AgentError(
+                        f"Week {week} not found in scheme (has {len(rows)} weeks)"
+                    )
+                week_content = rows[week - 1]
+
+            # Generate lesson plan using row content as guardrail.
             lesson_plan = await self._generate_lesson_plan_content(
                 scheme=scheme,
                 week_content=week_content,
                 lesson_number=lesson,
                 language=language,
+                additional_notes=additional_notes,
             )
-            
-            # Save lesson plan
+
+            # Stamp persistence metadata.
             lesson_plan_id = f"lesson_{uuid.uuid4().hex[:12]}"
             lesson_plan["lesson_plan_id"] = lesson_plan_id
             lesson_plan["scheme_id"] = scheme_id
             lesson_plan["teacher_id"] = teacher_id
+            lesson_plan["week"] = week
+            lesson_plan["lesson"] = lesson
             lesson_plan["created_at"] = datetime.now().isoformat()
-            
+
             if self.supabase:
                 await self._save_lesson_plan(lesson_plan)
-            
+
             self.logger.info("Lesson plan generated", lesson_plan_id=lesson_plan_id)
-            
+
             return {
                 "agent": "lesson_architect",
                 "action": "generate_lesson_plan",
                 "response": f"Generated lesson plan for Week {week}, Lesson {lesson}",
+                "lesson_plan_id": lesson_plan_id,
                 "lesson_plan": lesson_plan,
             }
-            
+
         except Exception as exc:
             self.logger.error("Lesson plan generation failed", error=str(exc))
             raise AgentError(f"Lesson plan generation failed: {exc}") from exc
