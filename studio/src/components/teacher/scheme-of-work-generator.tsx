@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast'
 import { curriculumData } from '@/data/curriculum/curriculum-structure'
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/api-config'
 import SchemePreview from '@/components/scheme-wizard/scheme-preview'
+import LessonPlanDialog from '@/components/scheme-wizard/lesson-plan-dialog'
 import type { SchemeRow } from '@/types/curriculum'
 
 // Stopgap teacher identity. Until real auth lands, persist a single ID per
@@ -31,6 +32,7 @@ export function SchemeOfWorkGenerator() {
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [schemeRows, setSchemeRows] = useState<SchemeRow[]>([])
+  const [lessonPlanRow, setLessonPlanRow] = useState<SchemeRow | null>(null)
 
   // Form states
   const [level, setLevel] = useState('')
@@ -282,7 +284,7 @@ export function SchemeOfWorkGenerator() {
                 subject={subject}
                 grade={grade}
                 term={term}
-                readOnly
+                onGenerateLessonPlan={(row) => setLessonPlanRow(row)}
               />
             </ScrollArea>
           ) : (
@@ -301,6 +303,20 @@ export function SchemeOfWorkGenerator() {
           )}
         </CardContent>
       </Card>
+
+      {lessonPlanRow && (
+        <LessonPlanDialog
+          open={!!lessonPlanRow}
+          onOpenChange={(v) => {
+            if (!v) setLessonPlanRow(null)
+          }}
+          row={lessonPlanRow}
+          grade={grade}
+          subject={subject}
+          term={term}
+          teacherId={getTeacherId()}
+        />
+      )}
     </div>
   )
 }

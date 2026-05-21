@@ -21,6 +21,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Loader2, Sparkles, Download, FileDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { SchemeRow } from '@/types/curriculum';
+import { API_ENDPOINTS, buildApiUrl } from '@/lib/api-config';
 
 interface LessonPlanDialogProps {
   open: boolean;
@@ -29,6 +30,8 @@ interface LessonPlanDialogProps {
   grade: string;
   subject: string;
   term?: string;
+  teacherId?: string;
+  schemeId?: string;
 }
 
 interface LessonPlan {
@@ -71,6 +74,8 @@ export default function LessonPlanDialog({
   grade,
   subject,
   term,
+  teacherId,
+  schemeId,
 }: LessonPlanDialogProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -82,33 +87,36 @@ export default function LessonPlanDialog({
   const handleGenerate = async () => {
     setLoading(true);
     try {
-      // Call SyncSenta Rust backend for lesson plan generation
-      const response = await fetch('/api/v1/lesson-plans/generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          grade,
-          subject,
-          term,
-          strand: row.strand,
-          subStrand: row.subStrand,
-          specificLearningOutcome: row.specificLearningOutcome,
-          learningExperiences: row.learningExperiences,
-          keyInquiryQuestion: row.keyInquiryQuestion,
-          learningResources: row.learningResources,
-          additionalNotes,
-        }),
-      });
+      // Repointed from the legacy Rust route to the Python ai-agents endpoint
+      // ported from scheme-scribe-ai. Returns the LessonPlan camelCase shape
+      // this component already renders against.
+      const response = await fetch(
+        buildApiUrl(API_ENDPOINTS.LESSON_ARCHITECT_GENERATE_LESSON_PLAN),
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            teacher_id: teacherId ?? 'unknown',
+            scheme_id: schemeId,
+            week: row.week ?? 1,
+            lesson: row.lesson ?? 1,
+            row,
+            grade,
+            subject,
+            term,
+            additional_notes: additionalNotes || undefined,
+          }),
+        }
+      );
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to generate lesson plan');
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.detail || error.error || 'Failed to generate lesson plan');
       }
 
       const data = await response.json();
-      setPlan(data.plan);
+      // Python endpoint returns { success, lesson_plan, lesson_plan_id, source }.
+      setPlan(data.lesson_plan ?? data.plan);
       setStep('preview');
 
       toast({ title: 'Lesson Plan Generated!' });

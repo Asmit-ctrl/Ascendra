@@ -27,21 +27,31 @@ CREATE INDEX IF NOT EXISTS idx_schemes_created ON schemes(created_at DESC);
 -- Lesson Plans table
 CREATE TABLE IF NOT EXISTS lesson_plans (
     lesson_plan_id TEXT PRIMARY KEY,
-    scheme_id TEXT NOT NULL REFERENCES schemes(scheme_id) ON DELETE CASCADE,
+    scheme_id TEXT REFERENCES schemes(scheme_id) ON DELETE CASCADE,
     teacher_id TEXT NOT NULL,
-    title TEXT NOT NULL,
     grade TEXT NOT NULL,
     subject TEXT NOT NULL,
+    strand TEXT,
+    sub_strand TEXT,
     week INTEGER NOT NULL,
-    lesson_number INTEGER NOT NULL,
+    lesson INTEGER NOT NULL DEFAULT 1,
+    -- Full validated LessonPlan JSON (scheme-scribe-ai contract).
+    -- camelCase keys: title, subStrand, keyInquiryQuestion, introduction{},
+    -- development{}, conclusion{}, assessment[], differentiation{},
+    -- resources[], teacherReflection, etc. See agents/scheme/lesson_plan.py.
+    plan JSONB NOT NULL,
+    -- Legacy typed columns kept nullable for back-compat with old readers.
+    -- New inserts do not populate these. Remove once no readers reference them.
+    title TEXT,
+    lesson_number INTEGER,
     duration_minutes INTEGER DEFAULT 40,
-    learning_outcomes JSONB NOT NULL,
-    key_questions JSONB NOT NULL,
-    introduction JSONB NOT NULL,
-    main_activities JSONB NOT NULL,
-    differentiation JSONB NOT NULL,
-    assessment JSONB NOT NULL,
-    conclusion JSONB NOT NULL,
+    learning_outcomes JSONB,
+    key_questions JSONB,
+    introduction JSONB,
+    main_activities JSONB,
+    differentiation JSONB,
+    assessment JSONB,
+    conclusion JSONB,
     teacher_notes TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

@@ -50,6 +50,26 @@ class ListSchemesRequest(BaseModel):
     subject: Optional[str] = None
 
 
+class GenerateLessonPlanRequest(BaseModel):
+    """Request to generate one CBC lesson plan from a SchemeRow.
+
+    The studio passes the selected ``SchemeRow`` directly as ``row`` along with
+    grade/subject context. ``scheme_id`` is the legacy fallback (load the row
+    from Supabase) and only kicks in when ``row`` is absent.
+    """
+
+    teacher_id: str
+    week: int
+    lesson: int = 1
+    scheme_id: Optional[str] = None
+    row: Optional[Dict[str, Any]] = None
+    grade: Optional[str] = None
+    subject: Optional[str] = None
+    term: Optional[str] = None
+    additional_notes: Optional[str] = None
+    language: str = "english"
+
+
 @router.post("/generate-scheme")
 async def generate_scheme(request: GenerateSchemeRequest) -> Dict[str, Any]:
     """Generate a scheme of work and return structured SchemeRow[] JSON.
@@ -106,6 +126,55 @@ async def generate_scheme(request: GenerateSchemeRequest) -> Dict[str, Any]:
         )
         raise HTTPException(
             status_code=500, detail=f"Failed to generate scheme: {exc}"
+        )
+
+
+@router.post("/generate-lesson-plan")
+async def generate_lesson_plan(request: GenerateLessonPlanRequest) -> Dict[str, Any]:
+    """Generate one CBC lesson plan and return the validated JSON shape.
+
+    Output ``lesson_plan`` matches the contract in
+    ``_inventory/scheme-scribe-ai/supabase/functions/generate-lesson-plan/index.ts``:
+    ``{title, grade, subject, strand, subStrand, duration, objectives[],
+    keyInquiryQuestion, introduction{duration,activities[]}, development{...},
+    conclusion{...}, assessment[], differentiation{advanced,struggling},
+    resources[], teacherReflection}``.
+    """
+
+    try:
+        agent = LessonArchitectAgent(supabase_client=get_supabase_client())
+        result = await agent.generate_lesson_plan(
+            week=request.week,
+            lesson=request.lesson,
+            teacher_id=request.teacher_id,
+            scheme_id=request.scheme_id,
+            row=request.row,
+            grade=request.grade,
+            subject=request.subject,
+            term=request.term,
+            additional_notes=request.additional_notes,
+            language=request.language,
+        )
+
+        return {
+            "success": True,
+            "lesson_plan_id": result.get("lesson_plan_id"),
+            "lesson_plan": result.get("lesson_plan", {}),
+            "source": "ai-agents",
+        }
+
+    except Exception as exc:
+        logger.error(
+            "Failed to generate lesson plan",
+            error=str(exc),
+            error_type=type(exc).__name__,
+            week=request.week,
+            lesson=request.lesson,
+            grade=request.grade,
+            subject=request.subject,
+        )
+        raise HTTPException(
+            status_code=500, detail=f"Failed to generate lesson plan: {exc}"
         )
 
 

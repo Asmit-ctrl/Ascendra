@@ -232,9 +232,14 @@ class LessonArchitectAgent:
             elif action == "generate_lesson_plan":
                 return await self.generate_lesson_plan(
                     scheme_id=context.get("scheme_id"),
+                    row=context.get("row"),
                     week=context.get("week", 1),
                     lesson=context.get("lesson", 1),
                     teacher_id=context.get("teacher_id", "unknown"),
+                    grade=grade,
+                    subject=subject,
+                    term=context.get("term"),
+                    additional_notes=context.get("additional_notes"),
                     language=context.get("language", "english"),
                 )
             
@@ -862,109 +867,85 @@ Return JSON array of {lessons_count} lesson objects:
         week_content: Dict[str, Any],
         lesson_number: int,
         language: str,
+        additional_notes: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Generate detailed lesson plan content."""
+        """Generate detailed lesson plan content via the ported pipeline.
+
+        Delegates to :func:`scheme.lesson_plan.generate_lesson_plan` which owns
+        the prompt, JSON contract, and Pydantic validation ported from
+        scheme-scribe-ai. Returns the validated plan as a dict so the caller
+        can stamp persistence metadata onto it.
+
+        ``week_content`` may use either camelCase (post-Phase-1 SchemeRow keys)
+        or the legacy snake_case keys; both are accepted here so older saved
+        schemes still produce lesson plans.
+        """
+        from .scheme.lesson_plan import (
+            LessonPlanValidationError,
+            generate_lesson_plan as _gen_lesson_plan,
+        )
+
+        def _pick(row: Dict[str, Any], *keys: str) -> Any:
+            for k in keys:
+                v = row.get(k)
+                if v not in (None, "", []):
+                    return v
+            return None
+
+        def _as_text(value: Any) -> Optional[str]:
+            if value is None:
+                return None
+            if isinstance(value, (list, tuple)):
+                return "; ".join(str(v) for v in value if v)
+            return str(value)
+
         grade = scheme.get("grade", "")
         subject = scheme.get("subject", "")
-        week = week_content.get("week", 1)
-        lessons_per_week = scheme.get("lessons_per_week", 5)
-        
-        # Extract guardrails from week content
-        slos = week_content.get("specific_learning_outcomes", [])
-        kiqs = week_content.get("key_inquiry_questions", [])
-        learning_experiences = week_content.get("learning_experiences", [])
-        resources = week_content.get("resources", [])
-        
-        # Get the specific learning experience for this lesson
-        if lesson_number <= len(learning_experiences):
-            focus_activity = learning_experiences[lesson_number - 1]
-        else:
-            focus_activity = learning_experiences[0] if learning_experiences else "General practice"
-        
-        prompt = f"""Generate a detailed CBC lesson plan.
+        term = scheme.get("term") or scheme.get("Term")
 
-Grade: {grade}
-Subject: {subject}
-Week: {week}
-Lesson: {lesson_number} of {lessons_per_week}
-Strand: {week_content.get('strand', '')}
-Sub-Strand: {week_content.get('sub_strand', '')}
-Language: {language}
+        strand = _pick(week_content, "strand", "Strand") or ""
+        sub_strand = _pick(week_content, "subStrand", "sub_strand", "SubStrand") or ""
+        slo = _as_text(
+            _pick(
+                week_content,
+                "specificLearningOutcome",
+                "specific_learning_outcomes",
+                "specific_learning_outcome",
+            )
+        )
+        learning_experiences = _as_text(
+            _pick(week_content, "learningExperiences", "learning_experiences")
+        )
+        kiq = _as_text(
+            _pick(
+                week_content,
+                "keyInquiryQuestion",
+                "key_inquiry_questions",
+                "key_inquiry_question",
+            )
+        )
+        resources = _as_text(
+            _pick(week_content, "learningResources", "learning_resources", "resources")
+        )
 
-GUARDRAILS FROM SCHEME (MUST USE):
-Specific Learning Outcomes: {json.dumps(slos)}
-Key Inquiry Questions: {json.dumps(kiqs)}
-Focus Activity: {focus_activity}
-Available Resources: {json.dumps(resources)}
-
-Generate a 40-minute lesson plan with:
-1. Introduction (5 min) - Hook/warm-up using Kenyan context
-2. Main Activities (25 min) - Step-by-step, aligned with focus activity
-3. Differentiation - Support for struggling students, extension for advanced
-4. Assessment - Formative checks during lesson
-5. Conclusion (5 min) - Summary and homework
-6. Reflection - What worked, what to adjust
-
-CRITICAL RULES:
-- Use the SLOs and KIQs from the scheme (don't create new ones)
-- Expand the focus activity into detailed steps
-- Use Kenyan examples throughout
-- Include specific questions to ask students
-- Provide concrete differentiation strategies
-- Make it ready-to-teach (teacher can print and use immediately)
-
-Return STRICT JSON:
-{{
-  "title": "Lesson title",
-  "grade": "{grade}",
-  "subject": "{subject}",
-  "week": {week},
-  "lesson_number": {lesson_number},
-  "duration_minutes": 40,
-  "learning_outcomes": {json.dumps(slos)},
-  "key_questions": {json.dumps(kiqs)},
-  "introduction": {{
-    "duration_minutes": 5,
-    "activities": ["Step 1", "Step 2"],
-    "materials": ["Material 1"]
-  }},
-  "main_activities": {{
-    "duration_minutes": 25,
-    "activities": ["Step 1", "Step 2", "Step 3"],
-    "materials": ["Material 1", "Material 2"]
-  }},
-  "differentiation": {{
-    "support": ["Strategy for struggling students"],
-    "extension": ["Challenge for advanced students"]
-  }},
-  "assessment": {{
-    "formative": ["Check 1", "Check 2"],
-    "questions": ["Question 1", "Question 2"]
-  }},
-  "conclusion": {{
-    "duration_minutes": 5,
-    "summary": "Key points to recap",
-    "homework": "Assignment for next lesson"
-  }},
-  "teacher_notes": "Tips for teaching this lesson"
-}}
-"""
-        
-        # Generate with LLM
-        raw = await self._provider().generate(prompt, system=_SYSTEM_PROMPT)
-        
-        # Parse JSON
         try:
-            data = json.loads(raw.strip())
-        except json.JSONDecodeError:
-            import re
-            match = re.search(r'\{.*\}', raw, re.DOTALL)
-            if match:
-                data = json.loads(match.group(0))
-            else:
-                raise AgentError("LLM did not return valid JSON for lesson plan")
-        
-        return data
+            plan = await _gen_lesson_plan(
+                self._provider(),
+                grade=grade,
+                subject=subject,
+                strand=strand,
+                sub_strand=sub_strand,
+                slo=slo,
+                learning_experiences=learning_experiences,
+                key_inquiry_question=kiq,
+                learning_resources=resources,
+                term=term,
+                additional_notes=additional_notes,
+            )
+        except LessonPlanValidationError as exc:
+            raise AgentError(f"Lesson plan validation failed: {exc}") from exc
+
+        return plan.model_dump()
 
     async def list_schemes(
         self,
@@ -1137,14 +1118,54 @@ Return STRICT JSON:
             return None
 
     async def _save_lesson_plan(self, lesson_plan: Dict[str, Any]) -> None:
-        """Save lesson plan to database."""
+        """Save lesson plan to database.
+
+        The full validated LessonPlan goes into the ``plan`` JSONB column;
+        only scalars used for filtering/indexing get their own columns. This
+        avoids the column-mismatch error that would happen if we tried to
+        insert the camelCase keys (``subStrand``, ``keyInquiryQuestion``, …)
+        directly against the legacy typed schema.
+        """
         if not self.supabase:
             self.logger.warning("Supabase not configured, lesson plan not saved")
             return
-        
+
+        # Separate persistence metadata (stamped by the caller) from the
+        # validated plan payload.
+        plan_payload = {
+            k: v
+            for k, v in lesson_plan.items()
+            if k not in {
+                "lesson_plan_id",
+                "scheme_id",
+                "teacher_id",
+                "week",
+                "lesson",
+                "created_at",
+            }
+        }
+
+        row = {
+            "lesson_plan_id": lesson_plan["lesson_plan_id"],
+            "scheme_id": lesson_plan.get("scheme_id"),
+            "teacher_id": lesson_plan["teacher_id"],
+            "grade": plan_payload.get("grade", ""),
+            "subject": plan_payload.get("subject", ""),
+            "strand": plan_payload.get("strand"),
+            "sub_strand": plan_payload.get("subStrand"),
+            "week": lesson_plan["week"],
+            "lesson": lesson_plan["lesson"],
+            "plan": plan_payload,
+            "created_at": lesson_plan["created_at"],
+        }
+
         try:
-            self.supabase.table("lesson_plans").insert(lesson_plan).execute()
-            self.logger.info("Lesson plan saved", lesson_plan_id=lesson_plan["lesson_plan_id"])
-            
+            self.supabase.table("lesson_plans").insert(row).execute()
+            self.logger.info("Lesson plan saved", lesson_plan_id=row["lesson_plan_id"])
         except Exception as exc:
-            self.logger.error("Failed to save lesson plan", error=str(exc))
+            self.logger.error(
+                "Failed to save lesson plan",
+                error=str(exc),
+                error_type=type(exc).__name__,
+                lesson_plan_id=row["lesson_plan_id"],
+            )

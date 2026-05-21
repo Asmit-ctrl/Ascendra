@@ -53,6 +53,7 @@ export const API_ENDPOINTS = {
 
   // Lesson Architect endpoints (scheme/lesson-plan/exam generation + storage)
   LESSON_ARCHITECT_GENERATE_SCHEME: '/lesson-architect/generate-scheme',
+  LESSON_ARCHITECT_GENERATE_LESSON_PLAN: '/lesson-architect/generate-lesson-plan',
   LESSON_ARCHITECT_SCHEMES: '/lesson-architect/schemes',
 
 

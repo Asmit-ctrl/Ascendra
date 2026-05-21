@@ -29,6 +29,14 @@ from .guardrails import (
     validate_ksa_structure,
     validate_slo_alignment,
 )
+from .lesson_plan import (
+    Differentiation,
+    LessonPlan,
+    LessonPlanValidationError,
+    LessonSection,
+    generate_lesson_plan,
+    parse_lesson_plan,
+)
 
 __all__ = [
     "SchemeRow",
@@ -44,4 +52,10 @@ __all__ = [
     "validate_and_sanitize_rows",
     "validate_ksa_structure",
     "validate_slo_alignment",
+    "LessonPlan",
+    "LessonSection",
+    "Differentiation",
+    "LessonPlanValidationError",
+    "generate_lesson_plan",
+    "parse_lesson_plan",
 ]
