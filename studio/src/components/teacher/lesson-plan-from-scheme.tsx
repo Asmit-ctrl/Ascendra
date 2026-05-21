@@ -1,0 +1,223 @@
+"use client"
+
+import { useState, useEffect } from 'react'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Badge } from '@/components/ui/badge'
+import { Loader2, FileText, Calendar, BookOpen, Sparkles, ChevronRight } from 'lucide-react'
+import { useToast } from '@/hooks/use-toast'
+import { buildApiUrl, API_ENDPOINTS } from '@/lib/api-config'
+import SchemePreview from '@/components/scheme-wizard/scheme-preview'
+import LessonPlanDialog from '@/components/scheme-wizard/lesson-plan-dialog'
+import type { SchemeRow } from '@/types/curriculum'
+
+interface SavedScheme {
+  scheme_id: string
+  title: string
+  grade: string
+  subject: string
+  term: string
+  total_weeks: number
+  lessons_per_week: number
+  rows: SchemeRow[]
+  created_at: string
+}
+
+export function LessonPlanFromScheme() {
+  const { toast } = useToast()
+  const [loading, setLoading] = useState(false)
+  const [schemes, setSchemes] = useState<SavedScheme[]>([])
+  const [selectedScheme, setSelectedScheme] = useState<SavedScheme | null>(null)
+  const [selectedRow, setSelectedRow] = useState<SchemeRow | null>(null)
+  const [lessonPlanDialogOpen, setLessonPlanDialogOpen] = useState(false)
+
+  useEffect(() => {
+    loadSchemes()
+  }, [])
+
+  const loadSchemes = async () => {
+    setLoading(true)
+    try {
+      const teacherId = localStorage.getItem('userId') || 'teacher_001'
+      const response = await fetch(
+        `${buildApiUrl(API_ENDPOINTS.LESSON_ARCHITECT_SCHEMES)}?teacher_id=${teacherId}`
+      )
+
+      if (!response.ok) {
+        throw new Error('Failed to load schemes')
+      }
+
+      const data = await response.json()
+      setSchemes(data.schemes || [])
+    } catch (error) {
+      console.error('Failed to load schemes:', error)
+      toast({
+        title: 'Failed to Load Schemes',
+        description: 'Could not load your saved schemes. Please try again.',
+        variant: 'destructive'
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleGenerateLessonPlan = (row: SchemeRow) => {
+    setSelectedRow(row)
+    setLessonPlanDialogOpen(true)
+  }
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 space-y-4">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="text-muted-foreground">Loading your schemes...</p>
+      </div>
+    )
+  }
+
+  if (schemes.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            Generate Lesson Plans from Schemes
+          </CardTitle>
+          <CardDescription>
+            Create detailed lesson plans from your saved schemes of work
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col items-center justify-center py-12 space-y-4 text-center">
+            <Calendar className="h-16 w-16 text-muted-foreground" />
+            <div>
+              <h3 className="font-semibold mb-2">No Schemes Found</h3>
+              <p className="text-sm text-muted-foreground max-w-md">
+                You need to generate a scheme of work first before creating lesson plans.
+              </p>
+              <p className="text-sm text-muted-foreground mt-2">
+                Go to the <strong>Schemes of Work</strong> tab to create your first scheme.
+              </p>
+            </div>
+            <Button onClick={() => window.location.reload()} variant="outline">
+              <Sparkles className="mr-2 h-4 w-4" />
+              Refresh
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (selectedScheme) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <Button
+              variant="ghost"
+              onClick={() => setSelectedScheme(null)}
+              className="mb-2"
+            >
+              ← Back to Schemes
+            </Button>
+            <h2 className="text-2xl font-bold">{selectedScheme.title}</h2>
+            <div className="flex gap-2 mt-2">
+              <Badge>{selectedScheme.grade}</Badge>
+              <Badge variant="secondary">{selectedScheme.subject}</Badge>
+              <Badge variant="outline">{selectedScheme.term}</Badge>
+            </div>
+          </div>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Select a Lesson to Generate Plan</CardTitle>
+            <CardDescription>
+              Click on any lesson below to generate a detailed lesson plan
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <SchemePreview
+              rows={selectedScheme.rows}
+              subject={selectedScheme.subject}
+              grade={selectedScheme.grade}
+              strand={selectedScheme.term}
+              onGenerateLessonPlan={handleGenerateLessonPlan}
+            />
+          </CardContent>
+        </Card>
+
+        {selectedRow && (
+          <LessonPlanDialog
+            open={lessonPlanDialogOpen}
+            onOpenChange={setLessonPlanDialogOpen}
+            row={selectedRow}
+            grade={selectedScheme.grade}
+            subject={selectedScheme.subject}
+            term={selectedScheme.term}
+          />
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            Your Schemes of Work
+          </CardTitle>
+          <CardDescription>
+            Select a scheme to generate lesson plans from
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ScrollArea className="h-[600px]">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {schemes.map((scheme) => (
+                <Card
+                  key={scheme.scheme_id}
+                  className="cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() => setSelectedScheme(scheme)}
+                >
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-start justify-between">
+                      <span className="flex-1">{scheme.title}</span>
+                      <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      <div className="flex gap-2 flex-wrap">
+                        <Badge>{scheme.grade}</Badge>
+                        <Badge variant="secondary">{scheme.subject}</Badge>
+                        <Badge variant="outline">{scheme.term}</Badge>
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4" />
+                          {scheme.total_weeks} weeks
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <BookOpen className="h-4 w-4" />
+                          {scheme.rows.length} lessons
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Created: {new Date(scheme.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </ScrollArea>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
