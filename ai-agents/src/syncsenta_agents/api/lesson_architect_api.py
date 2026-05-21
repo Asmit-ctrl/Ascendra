@@ -142,12 +142,17 @@ async def generate_lesson_plan(request: GenerateLessonPlanRequest) -> Dict[str, 
     """
 
     try:
+        # Normalize scheme_id: convert string "None" or empty string to None
+        scheme_id = request.scheme_id
+        if scheme_id in ("None", "", "null", "undefined"):
+            scheme_id = None
+        
         agent = LessonArchitectAgent(supabase_client=get_supabase_client())
         result = await agent.generate_lesson_plan(
             week=request.week,
             lesson=request.lesson,
             teacher_id=request.teacher_id,
-            scheme_id=request.scheme_id,
+            scheme_id=scheme_id,
             row=request.row,
             grade=request.grade,
             subject=request.subject,
