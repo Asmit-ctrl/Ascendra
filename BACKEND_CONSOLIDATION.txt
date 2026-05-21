@@ -1,0 +1,83 @@
+BACKEND CONSOLIDATION GUIDE
+===========================
+
+PROBLEM:
+--------
+The project had multiple systems for generating schemes and lesson plans:
+1. Main Studio (Ascendra/studio) - Uses AI Agents Python backend
+2. Scheme-Scribe Reference App - Uses Supabase Edge Functions
+3. Different APIs, different error handling, maintenance nightmare
+
+SOLUTION:
+---------
+Consolidate everything to use the centralized AI Agents Python backend at:
+  Ascendra/ai-agents/
+
+CHANGES MADE:
+-------------
+
+1. Teacher Profile Settings
+   - Added layout file: studio/src/app/teacher/layout.tsx
+   - Teachers now have same profile settings as students
+   - Uses AppHeader component with profile dropdown
+
+2. Fixed Lesson Generation Error
+   - Updated: ai-agents/src/syncsenta_agents/api/lesson_architect_api.py
+   - Normalizes scheme_id parameter (handles "None", "", "null", "undefined")
+   - Prevents "Scheme not found: None" error
+
+3. Centralized API Client
+   - Created: scheme-scribe-ai-reference/src/lib/api-client.ts
+   - Provides unified interface to AI agents backend
+   - Replaces Supabase Edge Functions calls
+
+4. Updated Lesson Plan Generation
+   - Modified: scheme-scribe-ai-reference/src/components/LessonPlanDialog.tsx
+   - Now uses apiClient.generateLessonPlan() instead of Supabase Edge Function
+   - Consistent with main studio implementation
+
+DEPLOYMENT REQUIREMENTS:
+------------------------
+
+1. AI Agents Backend MUST be running and accessible
+   - Development: http://localhost:8001
+   - Production: Set NEXT_PUBLIC_AI_AGENTS_URL environment variable
+
+2. Environment Variables:
+   
+   Main Studio (Ascendra/studio):
+   - NEXT_PUBLIC_AI_AGENTS_URL=<backend_url>
+   
+   Scheme-Scribe Reference (Ascendra/scheme-scribe-ai-reference):
+   - VITE_AI_AGENTS_URL=<backend_url>
+   - VITE_SUPABASE_URL=<supabase_url>
+   - VITE_SUPABASE_ANON_KEY=<supabase_key>
+
+3. Restart AI Agents Backend after code changes:
+   cd Ascendra/ai-agents
+   # Kill existing process
+   # Restart with: python -m syncsenta_agents.main
+
+BENEFITS:
+---------
+- Single source of truth for lesson generation logic
+- Consistent error handling across all apps
+- Easier to maintain and debug
+- Shared improvements benefit all apps
+- No duplicate code
+
+NEXT STEPS:
+-----------
+1. Update scheme-scribe SchemeGeneratorDialog to use centralized API
+2. Remove Supabase Edge Functions (generate-scheme, generate-lesson-plan)
+3. Update deployment documentation
+4. Add health check endpoint to AI agents backend
+5. Add monitoring and logging
+
+TESTING:
+--------
+1. Test teacher profile settings in main studio
+2. Test lesson plan generation in scheme-scribe app
+3. Test scheme generation in both apps
+4. Verify error handling works correctly
+5. Test with backend offline (should show clear error)
