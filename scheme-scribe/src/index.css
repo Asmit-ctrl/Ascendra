@@ -1,0 +1,225 @@
+@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 45 30% 97%;
+    --foreground: 160 30% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 160 30% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 160 30% 10%;
+
+    --primary: 152 55% 28%;
+    --primary-foreground: 45 30% 97%;
+
+    --secondary: 45 45% 90%;
+    --secondary-foreground: 160 30% 10%;
+
+    --muted: 45 20% 93%;
+    --muted-foreground: 160 10% 45%;
+
+    --accent: 30 70% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 160 15% 85%;
+    --input: 160 15% 85%;
+    --ring: 152 55% 28%;
+
+    --radius: 0.75rem;
+
+    --success: 152 55% 28%;
+    --success-foreground: 45 30% 97%;
+    --kenya-red: 0 72% 45%;
+    --kenya-green: 152 55% 28%;
+    --kenya-gold: 38 90% 52%;
+
+    /* Section accent gradients (subtle wash behind question groups) */
+    --section-mcq: 210 80% 50%;
+    --section-short: 152 55% 35%;
+    --section-long: 30 70% 50%;
+
+    --sidebar-background: 152 30% 12%;
+    --sidebar-foreground: 45 30% 92%;
+    --sidebar-primary: 38 90% 52%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 152 30% 18%;
+    --sidebar-accent-foreground: 45 30% 92%;
+    --sidebar-border: 152 20% 22%;
+    --sidebar-ring: 38 90% 52%;
+  }
+
+  .dark {
+    --background: 160 25% 7%;
+    --foreground: 45 25% 94%;
+
+    --card: 160 22% 10%;
+    --card-foreground: 45 25% 94%;
+
+    --popover: 160 22% 10%;
+    --popover-foreground: 45 25% 94%;
+
+    --primary: 152 55% 55%;
+    --primary-foreground: 160 30% 8%;
+
+    --secondary: 160 18% 16%;
+    --secondary-foreground: 45 25% 94%;
+
+    --muted: 160 18% 14%;
+    --muted-foreground: 45 8% 65%;
+
+    --accent: 30 75% 55%;
+    --accent-foreground: 160 30% 8%;
+
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 160 15% 22%;
+    --input: 160 15% 22%;
+    --ring: 152 55% 55%;
+
+    --success: 152 55% 55%;
+    --success-foreground: 160 30% 8%;
+    --kenya-red: 0 65% 60%;
+    --kenya-green: 152 55% 55%;
+    --kenya-gold: 38 90% 60%;
+
+    --section-mcq: 210 75% 60%;
+    --section-short: 152 50% 55%;
+    --section-long: 30 75% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+}
+
+/* Always-visible scrollbar for scheme table */
+.scheme-table-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+.scheme-table-scroll::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+  border-radius: 4px;
+}
+.scheme-table-scroll::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 4px;
+}
+.scheme-table-scroll::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground));
+}
+.scheme-table-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) hsl(var(--muted));
+}
+
+/* Print styles for PDF export */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 10mm;
+    /* Remove browser headers/footers (URL, date, page title) */
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+  body * {
+    visibility: hidden;
+  }
+  #scheme-print-area, #scheme-print-area * {
+    visibility: visible;
+  }
+  #scheme-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+  #scheme-print-area table {
+    font-size: 9pt;
+    width: 100%;
+    border-collapse: collapse;
+  }
+  #scheme-print-area th,
+  #scheme-print-area td {
+    border: 1px solid #666;
+    padding: 4px 6px;
+    text-align: left;
+    vertical-align: top;
+  }
+  #scheme-print-area th {
+    background: hsl(152 55% 28%) !important;
+    color: white !important;
+    font-weight: 700;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+/* Print styles for the EXAM PAPER (a separate, photocopy-ready layout) */
+@media print {
+  .exam-paper-print, .exam-paper-print * {
+    visibility: visible !important;
+  }
+  body:has(.exam-paper-print) * {
+    visibility: hidden;
+  }
+  .exam-paper-print {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    padding: 0;
+    color: #000;
+    background: #fff;
+  }
+  .exam-paper-print .answer-line {
+    display: block;
+    border-bottom: 1px solid #444;
+    height: 22px;
+    margin-bottom: 6px;
+  }
+  .exam-paper-print .answer-box {
+    border: 1px solid #444;
+    min-height: 90px;
+    margin-bottom: 8px;
+  }
+  .exam-paper-print h1, .exam-paper-print h2, .exam-paper-print h3 {
+    color: #000;
+  }
+  @page {
+    size: A4;
+    margin: 18mm;
+  }
+}
+
+/* Section accent — subtle gradient wash behind the section header strip */
+.section-strip {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius);
+}
+.section-strip::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    hsl(var(--section-color) / 0.15),
+    hsl(var(--section-color) / 0.02)
+  );
+  pointer-events: none;
+}

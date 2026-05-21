@@ -5,7 +5,7 @@ PROBLEM:
 --------
 The project had multiple systems for generating schemes and lesson plans:
 1. Main Studio (Ascendra/studio) - Uses AI Agents Python backend
-2. Scheme-Scribe Reference App - Uses Supabase Edge Functions
+2. Scheme-Scribe App (Ascendra/scheme-scribe) - Was using Supabase Edge Functions
 3. Different APIs, different error handling, maintenance nightmare
 
 SOLUTION:
@@ -27,14 +27,20 @@ CHANGES MADE:
    - Prevents "Scheme not found: None" error
 
 3. Centralized API Client
-   - Created: scheme-scribe-ai-reference/src/lib/api-client.ts
+   - Created: scheme-scribe/src/lib/api-client.ts
    - Provides unified interface to AI agents backend
    - Replaces Supabase Edge Functions calls
 
 4. Updated Lesson Plan Generation
-   - Modified: scheme-scribe-ai-reference/src/components/LessonPlanDialog.tsx
+   - Modified: scheme-scribe/src/components/LessonPlanDialog.tsx
    - Now uses apiClient.generateLessonPlan() instead of Supabase Edge Function
    - Consistent with main studio implementation
+
+5. Repository Cleanup
+   - Moved scheme-scribe-ai-reference to scheme-scribe
+   - Removed separate .git repository
+   - Added _inventory/ to .gitignore
+   - All code now under main Ascendra repository
 
 DEPLOYMENT REQUIREMENTS:
 ------------------------
@@ -48,7 +54,7 @@ DEPLOYMENT REQUIREMENTS:
    Main Studio (Ascendra/studio):
    - NEXT_PUBLIC_AI_AGENTS_URL=<backend_url>
    
-   Scheme-Scribe Reference (Ascendra/scheme-scribe-ai-reference):
+   Scheme-Scribe (Ascendra/scheme-scribe):
    - VITE_AI_AGENTS_URL=<backend_url>
    - VITE_SUPABASE_URL=<supabase_url>
    - VITE_SUPABASE_ANON_KEY=<supabase_key>
@@ -65,6 +71,7 @@ BENEFITS:
 - Easier to maintain and debug
 - Shared improvements benefit all apps
 - No duplicate code
+- All code in one repository
 
 NEXT STEPS:
 -----------

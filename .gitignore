@@ -168,3 +168,6 @@ test_*.htmlChatDev/
 .cache/
 .temp/
 *.tmp
+
+# Inventory and reference code (not part of main codebase)
+_inventory/
