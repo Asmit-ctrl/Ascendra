@@ -50,7 +50,12 @@ export function isBackendConfigured(): boolean {
 export const API_ENDPOINTS = {
   // Agent endpoints
   AGENTS_CHAT: '/agents/chat',
-  
+
+  // Lesson Architect endpoints (scheme/lesson-plan/exam generation + storage)
+  LESSON_ARCHITECT_GENERATE_SCHEME: '/lesson-architect/generate-scheme',
+  LESSON_ARCHITECT_SCHEMES: '/lesson-architect/schemes',
+
+
   // Dashboard endpoints
   DASHBOARD_AGENTS_STATS: '/dashboard/agents/stats',
   DASHBOARD_STUDENTS_ACTIVE: '/dashboard/students/active',

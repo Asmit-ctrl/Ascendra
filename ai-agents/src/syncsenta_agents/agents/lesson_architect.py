@@ -367,14 +367,20 @@ class LessonArchitectAgent:
                 weeks=len(scheme_rows)
             )
             
-            # Format the scheme as readable text for display
-            scheme_text = self._format_scheme_as_text(scheme)
-            
+            # Return structured rows directly — the studio renders the
+            # 10-column CBC table from `scheme.rows` (SchemeRow[]). The old
+            # markdown formatter is intentionally NOT called here; it produced
+            # the prose blob in savy.png because the studio rendered the
+            # `response` string verbatim. Keep the formatter around as a
+            # legacy export helper, but the API contract is JSON.
             return {
                 "agent": "lesson_architect",
                 "action": "generate_scheme",
-                "response": scheme_text,  # Return full formatted scheme
-                "scheme": scheme,  # Also include structured data
+                "response": (
+                    f"Generated {len(scheme_rows)}-lesson scheme for "
+                    f"{grade} {subject} ({term})"
+                ),
+                "scheme": scheme,  # Structured data — rows: SchemeRow[]
             }
             
         except Exception as exc:

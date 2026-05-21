@@ -6,10 +6,12 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Loader2, BookOpen, Download, Copy, Check, Calendar } from 'lucide-react'
+import { Loader2, BookOpen, Download, Calendar } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { curriculumData } from '@/data/curriculum/curriculum-structure'
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/api-config'
+import SchemePreview from '@/components/scheme-wizard/scheme-preview'
+import type { SchemeRow } from '@/types/curriculum'
 
 // Stopgap teacher identity. Until real auth lands, persist a single ID per
 // browser so the generate (save) and list paths agree. Replace with the
@@ -28,8 +30,7 @@ function getTeacherId(): string {
 export function SchemeOfWorkGenerator() {
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
-  const [generatedScheme, setGeneratedScheme] = useState('')
-  const [copied, setCopied] = useState(false)
+  const [schemeRows, setSchemeRows] = useState<SchemeRow[]>([])
 
   // Form states
   const [level, setLevel] = useState('')
@@ -59,158 +60,82 @@ export function SchemeOfWorkGenerator() {
     }
 
     setLoading(true)
-    setGeneratedScheme('')
+    setSchemeRows([])
 
     try {
-      // Get curriculum data for selected grade and subject
+      // The curated registry is optional context — generation falls through
+      // to an LLM-scaffolded scheme if a grade/subject pair isn't registered.
       const subjectData = curriculumData[level as keyof typeof curriculumData]?.[grade as any]?.[subject]
-      
       if (!subjectData) {
-        throw new Error('Curriculum data not found for this selection')
+        console.warn('No curated curriculum data for', grade, subject, '— backend will scaffold from scratch')
       }
-
-      const prompt = `Create a comprehensive 13-week Scheme of Work for ${grade} ${subject} - ${term}.
-
-Use this CBC curriculum data:
-${JSON.stringify(subjectData, null, 2)}
-
-Format the scheme as follows:
-
-# SCHEME OF WORK
-**Grade:** ${grade}
-**Subject:** ${subject}
-**Term:** ${term}
-**Duration:** 13 Weeks
-
-## Week 1: [Strand/Topic Name]
-**Learning Outcomes:**
-- [Specific, measurable outcomes]
-
-**Key Concepts:**
-- [Main concepts to cover]
-
-**Suggested Activities:**
-- [Activity 1]
-- [Activity 2]
-
-**Assessment:**
-- [How to assess learning]
-
-**Resources:**
-- [Materials needed]
-
----
-
-[Repeat for Weeks 2-13]
-
-## Assessment Plan
-- Formative assessments (ongoing)
-- Summative assessment (end of term)
-
-## Core Competencies Addressed
-- [List CBC core competencies]
-
-## Values Integrated
-- [List values]
-
-## Differentiation Strategies
-- For advanced learners
-- For struggling learners
-
-Make it detailed, practical, and ready for Kenyan teachers to use. Ensure it aligns with KICD CBC standards.`
 
       const teacherId = getTeacherId()
 
-      const response = await fetch(buildApiUrl(API_ENDPOINTS.AGENTS_CHAT), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: prompt,
-          user_id: teacherId,
-          session_id: `scheme_${Date.now()}`,
-          grade: grade,
-          subject: subject,
-          language: 'english',
-          role: 'teacher'
-        })
-      })
+      // Call the structured Python endpoint that returns SchemeRow[] JSON.
+      // The previous code routed through /agents/chat, which asked the LLM
+      // for a markdown blob — that's what produced the prose dump in
+      // savy.png. The new endpoint runs the LessonArchitectAgent with KSA
+      // guardrails and emits the 10-column CBC row shape directly.
+      const response = await fetch(
+        buildApiUrl(API_ENDPOINTS.LESSON_ARCHITECT_GENERATE_SCHEME),
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            teacher_id: teacherId,
+            grade,
+            subject,
+            term,
+            mode: 'standard',
+            language: 'english',
+          }),
+        }
+      )
 
       if (!response.ok) {
-        throw new Error('Failed to generate scheme of work')
+        const err = await response.json().catch(() => ({}))
+        throw new Error(err.detail || err.error || 'Failed to generate scheme of work')
       }
 
       const data = await response.json()
-      
-      if (data.success && data.response) {
-        setGeneratedScheme(data.response)
-        
-        // Save the scheme to database
-        try {
-          const saveResponse = await fetch(buildApiUrl('/lesson-architect/schemes'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              teacher_id: teacherId, // shared with /agents/chat above
-              grade: grade,
-              subject: subject,
-              term: term,
-              title: `${grade} ${subject} - ${term} Scheme of Work`,
-              content: data.response,
-              mode: 'standard',
-              language: 'english'
-            })
-          })
-          
-          if (saveResponse.ok) {
-            const saveData = await saveResponse.json()
-            console.log('Scheme saved:', saveData.scheme_id)
-          }
-        } catch (saveError) {
-          console.error('Failed to save scheme:', saveError)
-          // Don't show error to user - scheme was generated successfully
-        }
-        
-        toast({
-          title: 'Scheme of Work Generated!',
-          description: '13-week scheme ready for review',
-        })
-      } else {
-        throw new Error(data.error || 'Generation failed')
+      const rows: SchemeRow[] = Array.isArray(data?.rows) ? data.rows : []
+
+      if (!rows.length) {
+        throw new Error('Generation returned no rows')
       }
 
+      setSchemeRows(rows)
+
+      toast({
+        title: 'Scheme of Work Generated!',
+        description: `${rows.length}-lesson CBC scheme ready for review`,
+      })
     } catch (error) {
       console.error('Generation error:', error)
       toast({
         title: 'Generation Failed',
         description: error instanceof Error ? error.message : 'Please try again',
-        variant: 'destructive'
+        variant: 'destructive',
       })
     } finally {
       setLoading(false)
     }
   }
 
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(generatedScheme)
-    setCopied(true)
-    toast({
-      title: 'Copied!',
-      description: 'Scheme of work copied to clipboard'
+  const downloadAsJson = () => {
+    const blob = new Blob([JSON.stringify(schemeRows, null, 2)], {
+      type: 'application/json',
     })
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  const downloadAsDoc = () => {
-    const blob = new Blob([generatedScheme], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `scheme-of-work-${grade}-${subject}-${term}.txt`
+    a.download = `scheme-of-work-${grade}-${subject}-${term}.json`
     a.click()
     URL.revokeObjectURL(url)
     toast({
       title: 'Downloaded!',
-      description: 'Scheme of work saved to downloads'
+      description: 'Scheme of work saved as JSON',
     })
   }
 
@@ -329,15 +254,14 @@ Make it detailed, practical, and ready for Kenyan teachers to use. Ensure it ali
             <div>
               <CardTitle>Generated Scheme of Work</CardTitle>
               <CardDescription>
-                {generatedScheme ? '13-week scheme ready!' : 'Your scheme will appear here'}
+                {schemeRows.length
+                  ? `${schemeRows.length}-lesson scheme ready!`
+                  : 'Your scheme will appear here'}
               </CardDescription>
             </div>
-            {generatedScheme && (
+            {schemeRows.length > 0 && (
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={copyToClipboard}>
-                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                </Button>
-                <Button variant="outline" size="sm" onClick={downloadAsDoc}>
+                <Button variant="outline" size="sm" onClick={downloadAsJson}>
                   <Download className="h-4 w-4" />
                 </Button>
               </div>
@@ -348,16 +272,18 @@ Make it detailed, practical, and ready for Kenyan teachers to use. Ensure it ali
           {loading ? (
             <div className="flex flex-col items-center justify-center py-12 space-y-4">
               <Loader2 className="h-12 w-12 animate-spin text-primary" />
-              <p className="text-muted-foreground">Generating your 13-week scheme...</p>
+              <p className="text-muted-foreground">Generating your scheme...</p>
               <p className="text-sm text-muted-foreground">This may take 30-60 seconds</p>
             </div>
-          ) : generatedScheme ? (
+          ) : schemeRows.length > 0 ? (
             <ScrollArea className="h-[600px]">
-              <div className="prose prose-sm max-w-none dark:prose-invert">
-                <pre className="whitespace-pre-wrap font-sans text-sm">
-                  {generatedScheme}
-                </pre>
-              </div>
+              <SchemePreview
+                rows={schemeRows}
+                subject={subject}
+                grade={grade}
+                term={term}
+                readOnly
+              />
             </ScrollArea>
           ) : (
             <div className="flex flex-col items-center justify-center py-12 space-y-4 text-center">

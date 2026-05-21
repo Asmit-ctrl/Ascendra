@@ -2,23 +2,43 @@
 
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ..db.supabase_client import get_supabase_client
 from ..core.logging import get_logger
+from ..agents.lesson_architect import LessonArchitectAgent, SchemeMode
 
 router = APIRouter(prefix="/lesson-architect", tags=["lesson-architect"])
 logger = get_logger("lesson_architect_api")
 
 
+class GenerateSchemeRequest(BaseModel):
+    """Request to generate a scheme of work end-to-end (LLM + KSA guardrails)."""
+    teacher_id: str
+    grade: str
+    subject: str
+    term: str
+    mode: str = "standard"
+    language: str = "english"
+
+
 class SchemeRequest(BaseModel):
-    """Request to save a generated scheme."""
+    """Request to save a pre-generated scheme.
+
+    Accepts the structured ``SchemeRow[]`` JSON that the scheme-wizard renderer
+    consumes. ``content`` is accepted as a legacy fallback for clients that
+    still POST a markdown blob — those rows get wrapped in a single placeholder
+    entry so the studio can at least display them, but new clients should
+    always send ``rows``.
+    """
+
     teacher_id: str
     grade: str
     subject: str
     term: str
     title: str
-    content: str  # The generated scheme text
+    rows: Optional[List[Dict[str, Any]]] = None
+    content: Optional[str] = None  # legacy markdown fallback
     mode: str = "standard"
     language: str = "english"
 
@@ -28,6 +48,65 @@ class ListSchemesRequest(BaseModel):
     teacher_id: str
     grade: Optional[str] = None
     subject: Optional[str] = None
+
+
+@router.post("/generate-scheme")
+async def generate_scheme(request: GenerateSchemeRequest) -> Dict[str, Any]:
+    """Generate a scheme of work and return structured SchemeRow[] JSON.
+
+    Replaces the previous flow that routed scheme generation through the
+    generic ``/agents/chat`` endpoint and asked the LLM for markdown — that
+    is what produced the prose blob in ``savy.png``. This endpoint invokes
+    the ``LessonArchitectAgent`` directly, which already emits the 10-column
+    SchemeRow JSON with KSA-validated learning outcomes.
+    """
+
+    try:
+        try:
+            mode_enum = SchemeMode(request.mode)
+        except ValueError:
+            mode_enum = SchemeMode.STANDARD
+
+        agent = LessonArchitectAgent(supabase_client=get_supabase_client())
+        result = await agent.generate_scheme(
+            grade=request.grade,
+            subject=request.subject,
+            term=request.term,
+            mode=mode_enum,
+            teacher_id=request.teacher_id,
+            language=request.language,
+        )
+
+        scheme = result.get("scheme", {}) or {}
+        rows = scheme.get("rows", []) or []
+
+        return {
+            "success": True,
+            "scheme_id": scheme.get("scheme_id"),
+            "title": scheme.get("title"),
+            "grade": request.grade,
+            "subject": request.subject,
+            "term": request.term,
+            "mode": request.mode,
+            "language": request.language,
+            "total_weeks": scheme.get("total_weeks", len(rows)),
+            "lessons_per_week": scheme.get("lessons_per_week", 5),
+            "rows": rows,
+            "source": "ai-agents",
+        }
+
+    except Exception as exc:
+        logger.error(
+            "Failed to generate scheme",
+            error=str(exc),
+            error_type=type(exc).__name__,
+            grade=request.grade,
+            subject=request.subject,
+            term=request.term,
+        )
+        raise HTTPException(
+            status_code=500, detail=f"Failed to generate scheme: {exc}"
+        )
 
 
 @router.post("/schemes")
@@ -49,8 +128,21 @@ async def save_scheme(request: SchemeRequest) -> Dict[str, Any]:
         created_at = datetime.utcnow().isoformat()
         
         logger.info("Saving scheme", scheme_id=scheme_id, teacher_id=request.teacher_id)
-        
-        # Store the scheme with the content as a single row
+
+        # Prefer structured rows; fall back to the legacy markdown blob only
+        # when the caller hasn't migrated yet.
+        if request.rows:
+            rows_payload = request.rows
+        elif request.content:
+            rows_payload = [{"content": request.content}]
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Either 'rows' (SchemeRow[]) or 'content' must be provided",
+            )
+
+        total_weeks = max((r.get("week", 0) for r in rows_payload), default=13) or 13
+
         response = supabase.table("schemes").insert({
             "scheme_id": scheme_id,
             "title": request.title,
@@ -60,9 +152,9 @@ async def save_scheme(request: SchemeRequest) -> Dict[str, Any]:
             "mode": request.mode,
             "teacher_id": request.teacher_id,
             "language": request.language,
-            "total_weeks": 13,  # Standard CBC term
+            "total_weeks": total_weeks,
             "lessons_per_week": 5,  # Standard school week
-            "rows": [{"content": request.content}],  # Store as JSONB
+            "rows": rows_payload,  # JSONB SchemeRow[]
             "created_at": created_at,
         }).execute()
         
