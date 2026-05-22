@@ -98,6 +98,10 @@ app.include_router(lesson_architect_router)
 from .validation_api import router as validation_router
 app.include_router(validation_router)
 
+# Include training export routes
+from .training_export_api import router as training_export_router
+app.include_router(training_export_router)
+
 
 def _build_agent() -> AssessmentAgent:
     """Build the agent. If SYNCSENTA_OFFLINE_DEMO=1, use a deterministic stub

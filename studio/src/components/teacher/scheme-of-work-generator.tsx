@@ -14,6 +14,7 @@ import { buildApiUrl, API_ENDPOINTS } from '@/lib/api-config'
 import SchemePreview from '@/components/scheme-wizard/scheme-preview'
 import LessonPlanDialog from '@/components/scheme-wizard/lesson-plan-dialog'
 import { UnpackedOutcomeRenderer } from './unpacked-outcome-renderer'
+import { ExportTrainingDataButton } from './export-training-data-button'
 import type { SchemeRow } from '@/types/curriculum'
 
 // Stopgap teacher identity. Until real auth lands, persist a single ID per
@@ -39,6 +40,7 @@ export function SchemeOfWorkGenerator() {
   const [unpackedOutcome, setUnpackedOutcome] = useState<any>(null)
   const [unpacking, setUnpacking] = useState(false)
   const [originalOutcome, setOriginalOutcome] = useState('')
+  const [currentSchemeId, setCurrentSchemeId] = useState<string | null>(null)
 
   // Form states
   const [level, setLevel] = useState('')
@@ -114,6 +116,7 @@ export function SchemeOfWorkGenerator() {
       }
 
       setSchemeRows(rows)
+      setCurrentSchemeId(data.scheme_id || null)
 
       toast({
         title: 'Scheme of Work Generated!',
@@ -323,6 +326,12 @@ export function SchemeOfWorkGenerator() {
             </div>
             {schemeRows.length > 0 && (
               <div className="flex gap-2">
+                <ExportTrainingDataButton
+                  schemeId={currentSchemeId || undefined}
+                  teacherId={getTeacherId()}
+                  variant="outline"
+                  size="sm"
+                />
                 <Button variant="outline" size="sm" onClick={downloadAsJson}>
                   <Download className="h-4 w-4" />
                 </Button>
