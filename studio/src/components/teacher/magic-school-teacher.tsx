@@ -14,6 +14,9 @@ import { Loader2, Sparkles, FileText, ClipboardList, BookOpen, Users, MessageSqu
 import { useToast } from '@/hooks/use-toast'
 import { SchemeOfWorkGenerator } from './scheme-of-work-generator'
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/api-config'
+import { WorksheetRenderer } from './worksheet-renderer'
+import { TextLevelerRenderer } from './text-leveler-renderer'
+import '@/styles/print.css'
 
 export function MagicSchoolTeacher() {
   const { toast } = useToast()
@@ -30,6 +33,10 @@ export function MagicSchoolTeacher() {
   const [learningObjectives, setLearningObjectives] = useState('')
   const [numQuestions, setNumQuestions] = useState('10')
   const [difficulty, setDifficulty] = useState('medium')
+  const [sourceUrl, setSourceUrl] = useState('')
+  const [inputText, setInputText] = useState('')
+  const [worksheetResult, setWorksheetResult] = useState<any>(null)
+  const [levelerResult, setLevelerResult] = useState<any>(null)
 
   const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9']
   const subjects = ['Mathematics', 'English', 'Kiswahili', 'Science', 'Social Studies', 'CRE', 'IRE', 'HRE', 'Creative Arts', 'Agriculture']
@@ -46,8 +53,95 @@ export function MagicSchoolTeacher() {
 
     setLoading(true)
     setGeneratedContent('')
+    setWorksheetResult(null)
+    setLevelerResult(null)
 
     try {
+      const teacherId = 'teacher_001'
+
+      if (type === 'worksheet') {
+        const row = {
+          strand: topic,
+          subStrand: topic,
+          specificLearningOutcome: learningObjectives || `Learners will explore ${topic}`,
+          keyInquiryQuestion: `How can learners demonstrate their understanding of ${topic}?`,
+          learningExperiences: `Class discussion, guided practice, and written responses on ${topic}`,
+          learningResources: `Textbook examples, classroom board, and student notebooks`,
+          assessmentMethods: `Written answers and short explanations`,
+          reflection: `Reflect on how well learners grasped ${topic}`,
+        }
+
+        const response = await fetch(
+          buildApiUrl(API_ENDPOINTS.LESSON_ARCHITECT_GENERATE_WORKSHEET),
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              teacher_id: teacherId,
+              grade,
+              subject,
+              term: 'Term 1',
+              language: 'english',
+              duration_minutes: Number(duration),
+              row,
+            }),
+          }
+        )
+
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}))
+          throw new Error(err.detail || err.error || 'Failed to generate worksheet')
+        }
+
+        const data = await response.json()
+        setWorksheetResult(data.worksheet)
+        toast({
+          title: 'Worksheet Generated!',
+          description: 'A KSA-balanced worksheet is ready for review',
+        })
+        return
+      }
+
+      if (type === 'text-leveler') {
+        if (!inputText.trim() && !sourceUrl.trim()) {
+          toast({
+            title: 'Missing Text',
+            description: 'Please paste source text or provide a source URL',
+            variant: 'destructive'
+          })
+          return
+        }
+
+        const response = await fetch(
+          buildApiUrl(API_ENDPOINTS.LESSON_ARCHITECT_GENERATE_TEXT_LEVELER),
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              teacher_id: teacherId,
+              grade,
+              subject,
+              language: 'english',
+              input_text: inputText || undefined,
+              source_url: sourceUrl || undefined,
+            }),
+          }
+        )
+
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}))
+          throw new Error(err.detail || err.error || 'Failed to generate text leveler')
+        }
+
+        const data = await response.json()
+        setLevelerResult(data.leveler)
+        toast({
+          title: 'Text Leveler Ready!',
+          description: 'A leveled passage and comprehension questions have been generated',
+        })
+        return
+      }
+
       let prompt = ''
       
       switch (type) {
@@ -89,19 +183,6 @@ D) [option]
 Correct Answer: [letter]
 Explanation: [why]
 Competency: [CBC competency]`
-          break
-
-        case 'worksheet':
-          prompt = `Create an engaging worksheet for ${grade} ${subject} on "${topic}".
-Include:
-1. Title and instructions
-2. 10-15 varied activities (fill-in-blanks, matching, short answer, problem-solving)
-3. Visual elements descriptions
-4. Answer key at the end
-5. Extension challenge
-6. Space for student name and date
-
-Make it print-ready and engaging for Kenyan students.`
           break
 
         case 'rubric':
@@ -205,6 +286,14 @@ Tone: Professional, warm, encouraging. Kenyan context.`
     })
   }
 
+  const printToPDF = () => {
+    window.print()
+    toast({
+      title: 'Print Dialog Opened',
+      description: 'Select "Save as PDF" to download'
+    })
+  }
+
   return (
     <div className="container mx-auto p-6 max-w-7xl">
       <div className="mb-8">
@@ -219,7 +308,7 @@ Tone: Professional, warm, encouraging. Kenyan context.`
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid grid-cols-3 lg:grid-cols-7 gap-2">
+        <TabsList className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
           <TabsTrigger value="scheme-of-work" className="gap-2">
             <Calendar className="h-4 w-4" />
             Scheme of Work
@@ -235,6 +324,10 @@ Tone: Professional, warm, encouraging. Kenyan context.`
           <TabsTrigger value="worksheet" className="gap-2">
             <BookOpen className="h-4 w-4" />
             Worksheets
+          </TabsTrigger>
+          <TabsTrigger value="text-leveler" className="gap-2">
+            <Brain className="h-4 w-4" />
+            Text Leveler
           </TabsTrigger>
           <TabsTrigger value="rubric" className="gap-2">
             <Award className="h-4 w-4" />
@@ -569,13 +662,149 @@ Tone: Professional, warm, encouraging. Kenyan context.`
 
         {/* Worksheet, Rubric, Differentiation, Parent Letter tabs - similar structure */}
         <TabsContent value="worksheet">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="lg:col-span-3">
-            <CardContent className="py-12">
-              <p className="text-center text-muted-foreground">Use the form above to generate worksheets</p>
-            </CardContent>
-          </Card>
-        </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Card className="lg:col-span-1">
+              <CardHeader>
+                <CardTitle>Worksheet Inputs</CardTitle>
+                <CardDescription>Give the worksheet a focused topic and objective.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Topic</Label>
+                  <Input
+                    value={topic}
+                    onChange={(event) => setTopic(event.target.value)}
+                    placeholder="e.g., Fractions: halves and quarters"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Learning Objective</Label>
+                  <Textarea
+                    value={learningObjectives}
+                    onChange={(event) => setLearningObjectives(event.target.value)}
+                    placeholder="e.g., Learners will identify half and quarter values"
+                    rows={4}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Duration (minutes)</Label>
+                  <Input
+                    type="number"
+                    value={duration}
+                    onChange={(event) => setDuration(event.target.value)}
+                  />
+                </div>
+                <Button
+                  onClick={() => generateContent('worksheet')}
+                  disabled={loading}
+                  className="w-full"
+                  size="lg"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Generating Worksheet...
+                    </>
+                  ) : (
+                    'Generate Worksheet'
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle>Worksheet Preview</CardTitle>
+                <CardDescription>
+                  {worksheetResult ? 'Review the generated worksheet below.' : 'Generate a worksheet to preview the structured items.'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {worksheetResult ? (
+                  <WorksheetRenderer worksheet={worksheetResult} />
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-12 space-y-4 text-center">
+                    <BookOpen className="h-16 w-16 text-muted-foreground" />
+                    <div>
+                      <h3 className="font-semibold mb-2">Ready to generate a worksheet</h3>
+                      <p className="text-sm text-muted-foreground max-w-md">
+                        Use the form to create a KSA-balanced worksheet for your class.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="text-leveler">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Card className="lg:col-span-1">
+              <CardHeader>
+                <CardTitle>Text Leveler</CardTitle>
+                <CardDescription>Paste text or provide a URL to generate a grade-appropriate passage.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Source URL</Label>
+                  <Input
+                    value={sourceUrl}
+                    onChange={(event) => setSourceUrl(event.target.value)}
+                    placeholder="Optional source URL"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Input Text</Label>
+                  <Textarea
+                    value={inputText}
+                    onChange={(event) => setInputText(event.target.value)}
+                    placeholder="Paste the source text here"
+                    rows={8}
+                  />
+                </div>
+                <Button
+                  onClick={() => generateContent('text-leveler')}
+                  disabled={loading}
+                  className="w-full"
+                  size="lg"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Generating Leveler...
+                    </>
+                  ) : (
+                    'Generate Leveler'
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle>Leveled Passage</CardTitle>
+                <CardDescription>
+                  {levelerResult ? 'Review the generated passage and questions.' : 'Generated passages will appear here.'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {levelerResult ? (
+                  <TextLevelerRenderer leveler={levelerResult} />
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-12 space-y-4 text-center">
+                    <Brain className="h-16 w-16 text-muted-foreground" />
+                    <div>
+                      <h3 className="font-semibold mb-2">Ready to level text</h3>
+                      <p className="text-sm text-muted-foreground max-w-md">
+                        Paste a paragraph or provide a URL to get a passage and questions.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="rubric">

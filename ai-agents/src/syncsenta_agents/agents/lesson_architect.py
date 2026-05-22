@@ -860,6 +860,403 @@ Return JSON array of {lessons_count} lesson objects:
             self.logger.error("Lesson plan generation failed", error=str(exc))
             raise AgentError(f"Lesson plan generation failed: {exc}") from exc
 
+    async def generate_exam(
+        self,
+        *,
+        teacher_id: str,
+        grade: str,
+        subject: str,
+        term: str,
+        allocation: List[Dict[str, Any]],
+        counts: Optional[Dict[str, int]] = None,
+    ) -> Dict[str, Any]:
+        """Generate an end-of-term exam scope-validated against ``allocation``.
+
+        Ported from
+        ``_inventory/scheme-scribe-ai/supabase/functions/generate-exam/index.ts``.
+        Returns ``{exam_id, questions, total_marks, meta}``. ``questions`` is
+        a list of dicts shaped as :class:`scheme.exam.ExamQuestion` (MCQ /
+        ShortQ / LongQ discriminated union — the studio renders these by
+        ``type``). Caches by ``(grade, subject, term)`` in the ``exams`` table
+        when Supabase is configured; otherwise the exam is returned without
+        persistence.
+        """
+        from .scheme.exam import (
+            ExamCounts,
+            ExamValidationError,
+            StrandAllocation,
+            generate_exam as _gen_exam,
+        )
+
+        try:
+            self.logger.info(
+                "Generating exam",
+                grade=grade,
+                subject=subject,
+                term=term,
+                allocation_strands=len(allocation),
+            )
+
+            try:
+                allocation_models = [StrandAllocation.model_validate(s) for s in allocation]
+            except Exception as exc:
+                raise AgentError(f"Invalid allocation: {exc}") from exc
+
+            counts_model = ExamCounts.model_validate(counts) if counts else ExamCounts()
+
+            try:
+                questions = await _gen_exam(
+                    self._provider(),
+                    grade=grade,
+                    subject=subject,
+                    term=term,
+                    allocation=allocation_models,
+                    counts=counts_model,
+                )
+            except ExamValidationError as exc:
+                raise AgentError(f"Exam generation failed: {exc}") from exc
+
+            question_dicts = [q.model_dump() for q in questions]
+            total_marks = sum(q.marks for q in questions)
+            exam_id = f"exam_{uuid.uuid4().hex[:12]}"
+
+            if self.supabase:
+                await self._save_exam(
+                    exam_id=exam_id,
+                    teacher_id=teacher_id,
+                    grade=grade,
+                    subject=subject,
+                    term=term,
+                    questions=question_dicts,
+                    total_marks=total_marks,
+                )
+
+            return {
+                "agent": "lesson_architect",
+                "action": "generate_exam",
+                "exam_id": exam_id,
+                "questions": question_dicts,
+                "total_marks": total_marks,
+                "meta": {
+                    "grade": grade,
+                    "subject": subject,
+                    "term": term,
+                    "total": len(question_dicts),
+                },
+            }
+
+        except AgentError:
+            raise
+        except Exception as exc:
+            self.logger.error("Exam generation failed", error=str(exc))
+            raise AgentError(f"Exam generation failed: {exc}") from exc
+
+    async def _save_exam(
+        self,
+        *,
+        exam_id: str,
+        teacher_id: str,
+        grade: str,
+        subject: str,
+        term: str,
+        questions: List[Dict[str, Any]],
+        total_marks: int,
+    ) -> None:
+        """Persist an exam paper. Best-effort — failures are logged, not raised."""
+        if not self.supabase:
+            return
+        row = {
+            "exam_id": exam_id,
+            "created_by": teacher_id,
+            "grade": grade,
+            "subject": subject,
+            "term": term,
+            "questions": questions,
+            "total_marks": total_marks,
+            "created_at": datetime.now().isoformat(),
+        }
+        try:
+            self.supabase.table("exams").insert(row).execute()
+            self.logger.info("Exam saved", exam_id=exam_id)
+        except Exception as exc:
+            self.logger.error(
+                "Failed to save exam",
+                error=str(exc),
+                error_type=type(exc).__name__,
+                exam_id=exam_id,
+            )
+
+    async def generate_worksheet(
+        self,
+        *,
+        teacher_id: str,
+        row: Dict[str, Any],
+        grade: str,
+        subject: str,
+        term: Optional[str] = None,
+        language: str = "english",
+        duration_minutes: int = 30,
+    ) -> Dict[str, Any]:
+        """Generate one KSA-balanced worksheet for the given ``SchemeRow``.
+
+        Returns ``{worksheet_id, worksheet: Worksheet-dict}``. Persists
+        best-effort to ``worksheets`` when Supabase is configured; failures
+        are logged, not raised. ``term`` is recorded for filtering but not
+        used in generation (the SchemeRow already carries the curricular
+        context).
+        """
+        from .scheme.worksheet import (
+            WorksheetValidationError,
+            generate_worksheet as _gen_worksheet,
+        )
+
+        try:
+            self.logger.info(
+                "Generating worksheet",
+                grade=grade,
+                subject=subject,
+                strand=row.get("strand") or row.get("Strand"),
+                sub_strand=row.get("subStrand")
+                or row.get("sub_strand")
+                or row.get("SubStrand"),
+            )
+
+            try:
+                worksheet = await _gen_worksheet(
+                    self._provider(),
+                    row=row,
+                    grade=grade,
+                    subject=subject,
+                    language=language,
+                    duration_minutes=duration_minutes,
+                )
+            except WorksheetValidationError as exc:
+                raise AgentError(f"Worksheet generation failed: {exc}") from exc
+
+            worksheet_dict = worksheet.model_dump()
+            worksheet_id = f"worksheet_{uuid.uuid4().hex[:12]}"
+
+            if self.supabase:
+                await self._save_worksheet(
+                    worksheet_id=worksheet_id,
+                    teacher_id=teacher_id,
+                    grade=grade,
+                    subject=subject,
+                    term=term,
+                    payload=worksheet_dict,
+                )
+
+            return {
+                "agent": "lesson_architect",
+                "action": "generate_worksheet",
+                "worksheet_id": worksheet_id,
+                "worksheet": worksheet_dict,
+            }
+
+        except AgentError:
+            raise
+        except Exception as exc:
+            self.logger.error("Worksheet generation failed", error=str(exc))
+            raise AgentError(f"Worksheet generation failed: {exc}") from exc
+
+    async def _save_worksheet(
+        self,
+        *,
+        worksheet_id: str,
+        teacher_id: str,
+        grade: str,
+        subject: str,
+        term: Optional[str],
+        payload: Dict[str, Any],
+    ) -> None:
+        """Persist a worksheet. Best-effort — failures log, don't raise.
+
+        Table not yet provisioned — landing alongside the studio UI in the
+        follow-up phase. Insert will fail and log until migration lands.
+        """
+        if not self.supabase:
+            return
+        row = {
+            "worksheet_id": worksheet_id,
+            "teacher_id": teacher_id,
+            "grade": grade,
+            "subject": subject,
+            "term": term,
+            "strand": payload.get("strand"),
+            "sub_strand": payload.get("subStrand"),
+            "payload": payload,
+            "created_at": datetime.now().isoformat(),
+        }
+        try:
+            self.supabase.table("worksheets").insert(row).execute()
+            self.logger.info("Worksheet saved", worksheet_id=worksheet_id)
+        except Exception as exc:
+            self.logger.error(
+                "Failed to save worksheet",
+                error=str(exc),
+                error_type=type(exc).__name__,
+                worksheet_id=worksheet_id,
+            )
+
+    async def generate_text_leveler(
+        self,
+        *,
+        teacher_id: str,
+        grade: str,
+        subject: str,
+        language: str = "english",
+        input_text: Optional[str] = None,
+        source_url: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Generate a grade-appropriate leveled passage and KSA-aligned questions.
+
+        Input can be raw pasted text or a source URL. Returns a structured
+        TextLeveler result suitable for the studio to render directly.
+        """
+        from .scheme.leveler import (
+            TextLevelerValidationError,
+            generate_text_leveler as _gen_leveler,
+        )
+
+        try:
+            self.logger.info(
+                "Generating text leveler",
+                grade=grade,
+                subject=subject,
+                source_url=source_url,
+            )
+
+            try:
+                leveler = await _gen_leveler(
+                    self._provider(),
+                    grade=grade,
+                    subject=subject,
+                    language=language,
+                    input_text=input_text,
+                    source_url=source_url,
+                )
+            except TextLevelerValidationError as exc:
+                raise AgentError(f"Text leveler generation failed: {exc}") from exc
+
+            leveler_dict = leveler.model_dump()
+            leveler_id = f"leveler_{uuid.uuid4().hex[:12]}"
+
+            return {
+                "agent": "lesson_architect",
+                "action": "generate_text_leveler",
+                "leveler_id": leveler_id,
+                "leveler": leveler_dict,
+            }
+
+        except AgentError:
+            raise
+        except Exception as exc:
+            self.logger.error("Text leveler generation failed", error=str(exc))
+            raise AgentError(f"Text leveler generation failed: {exc}") from exc
+
+    async def unpack_outcome(
+        self,
+        *,
+        teacher_id: str,
+        outcome: str,
+        grade: str,
+        subject: str,
+        language: str = "english",
+    ) -> Dict[str, Any]:
+        """Unpack a KICD learning outcome into "I can…" statements + success criteria.
+
+        Returns ``{unpacked_id, unpacked: UnpackedOutcome-dict}``. Persists
+        best-effort to the ``unpacked_outcomes`` table when Supabase is
+        configured; failures are logged, not raised.
+        """
+        from .unpacker import (
+            UnpackerValidationError,
+            generate_unpacked_outcome as _gen_unpacked,
+        )
+
+        try:
+            self.logger.info(
+                "Unpacking outcome",
+                grade=grade,
+                subject=subject,
+                outcome_preview=outcome[:80] if outcome else "",
+            )
+
+            try:
+                unpacked = await _gen_unpacked(
+                    self._provider(),
+                    outcome=outcome,
+                    grade=grade,
+                    subject=subject,
+                    language=language,
+                )
+            except UnpackerValidationError as exc:
+                raise AgentError(f"Outcome unpacking failed: {exc}") from exc
+
+            unpacked_dict = unpacked.model_dump()
+            unpacked_id = f"unpack_{uuid.uuid4().hex[:12]}"
+
+            if self.supabase:
+                await self._save_unpacked_outcome(
+                    unpacked_id=unpacked_id,
+                    teacher_id=teacher_id,
+                    grade=grade,
+                    subject=subject,
+                    outcome=outcome,
+                    payload=unpacked_dict,
+                )
+
+            return {
+                "agent": "lesson_architect",
+                "action": "unpack_outcome",
+                "unpacked_id": unpacked_id,
+                "unpacked": unpacked_dict,
+            }
+
+        except AgentError:
+            raise
+        except Exception as exc:
+            self.logger.error("Outcome unpacking failed", error=str(exc))
+            raise AgentError(f"Outcome unpacking failed: {exc}") from exc
+
+    async def _save_unpacked_outcome(
+        self,
+        *,
+        unpacked_id: str,
+        teacher_id: str,
+        grade: str,
+        subject: str,
+        outcome: str,
+        payload: Dict[str, Any],
+    ) -> None:
+        """Persist an unpacked outcome. Best-effort — failures log, don't raise.
+
+        Table not yet provisioned — landing alongside the studio UI in the
+        follow-up phase. Until then this insert will fail and log, which is
+        the intended dev-phase behaviour.
+        """
+        if not self.supabase:
+            return
+        row = {
+            "unpacked_id": unpacked_id,
+            "teacher_id": teacher_id,
+            "grade": grade,
+            "subject": subject,
+            "outcome": outcome,
+            "payload": payload,
+            "created_at": datetime.now().isoformat(),
+        }
+        try:
+            self.supabase.table("unpacked_outcomes").insert(row).execute()
+            self.logger.info("Unpacked outcome saved", unpacked_id=unpacked_id)
+        except Exception as exc:
+            self.logger.error(
+                "Failed to save unpacked outcome",
+                error=str(exc),
+                error_type=type(exc).__name__,
+                unpacked_id=unpacked_id,
+            )
+
     async def _generate_lesson_plan_content(
         self,
         *,

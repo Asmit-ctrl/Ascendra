@@ -239,10 +239,38 @@ def get_subjects_for_grade(grade: str) -> List[str]:
 CURRICULUM_REGISTRY = _HARDCODED_STRANDS
 
 
+# --- Curriculum-validation subsystem -----------------------------------
+# Validator types live in ``models`` and reuse the ``StrandInfo`` /
+# ``SubStrandInfo`` names with a different shape (snake_case dataclasses vs
+# the legacy camelCase TypedDicts above). Expose them under non-conflicting
+# aliases so callers can pick the contract they want.
+
+from .models import (
+    Topic,
+    AlternativeTopic,
+    ValidationResult,
+    MisalignedTopic,
+    CurriculumData,
+    StrandInfo as ValidatorStrandInfo,
+    SubStrandInfo as ValidatorSubStrandInfo,
+    ContentType,
+    ValidationStatus,
+)
+from .cache import CurriculumCache
+from .extractor import TopicExtractor
+from .validator import CurriculumValidator
+
+
 __all__ = [
+    # Legacy registry (used by LessonArchitectAgent.generate_scheme)
     "StrandInfo", "SubStrandInfo", "SchemeRow",
     "get_hardcoded_strands", "get_sub_strands_for_strand",
     "get_lessons_per_week", "get_subjects_for_grade",
     "COLUMN_HEADERS", "KISWAHILI_SUBJECTS", "GRADES",
     "CURRICULUM_REGISTRY",
+    # Curriculum-validation subsystem
+    "Topic", "AlternativeTopic", "MisalignedTopic", "ValidationResult",
+    "CurriculumData", "ValidatorStrandInfo", "ValidatorSubStrandInfo",
+    "ContentType", "ValidationStatus",
+    "CurriculumCache", "TopicExtractor", "CurriculumValidator",
 ]

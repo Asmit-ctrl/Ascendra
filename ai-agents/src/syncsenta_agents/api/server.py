@@ -94,6 +94,10 @@ app.include_router(telemetry_router)
 from .lesson_architect_api import router as lesson_architect_router
 app.include_router(lesson_architect_router)
 
+# Include curriculum-validation routes
+from .validation_api import router as validation_router
+app.include_router(validation_router)
+
 
 def _build_agent() -> AssessmentAgent:
     """Build the agent. If SYNCSENTA_OFFLINE_DEMO=1, use a deterministic stub

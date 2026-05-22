@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -12,6 +13,7 @@ import { curriculumData } from '@/data/curriculum/curriculum-structure'
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/api-config'
 import SchemePreview from '@/components/scheme-wizard/scheme-preview'
 import LessonPlanDialog from '@/components/scheme-wizard/lesson-plan-dialog'
+import { UnpackedOutcomeRenderer } from './unpacked-outcome-renderer'
 import type { SchemeRow } from '@/types/curriculum'
 
 // Stopgap teacher identity. Until real auth lands, persist a single ID per
@@ -33,6 +35,10 @@ export function SchemeOfWorkGenerator() {
   const [loading, setLoading] = useState(false)
   const [schemeRows, setSchemeRows] = useState<SchemeRow[]>([])
   const [lessonPlanRow, setLessonPlanRow] = useState<SchemeRow | null>(null)
+  const [unpackDialogOpen, setUnpackDialogOpen] = useState(false)
+  const [unpackedOutcome, setUnpackedOutcome] = useState<any>(null)
+  const [unpacking, setUnpacking] = useState(false)
+  const [originalOutcome, setOriginalOutcome] = useState('')
 
   // Form states
   const [level, setLevel] = useState('')
@@ -139,6 +145,60 @@ export function SchemeOfWorkGenerator() {
       title: 'Downloaded!',
       description: 'Scheme of work saved as JSON',
     })
+  }
+
+  const handleUnpackOutcome = async (row: SchemeRow) => {
+    const outcome =
+      row.specificLearningOutcome ||
+      row.subStrand ||
+      row.strand ||
+      ''
+
+    if (!outcome.trim()) {
+      toast({
+        title: 'No outcome found',
+        description: 'This row does not contain a specific learning outcome to unpack.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setOriginalOutcome(outcome)
+    setUnpacking(true)
+    setUnpackedOutcome(null)
+    setUnpackDialogOpen(true)
+
+    try {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.LESSON_ARCHITECT_UNPACK_OUTCOME), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          teacher_id: getTeacherId(),
+          outcome,
+          grade,
+          subject,
+          language: 'english',
+        }),
+      })
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error(err.detail || err.error || 'Failed to unpack outcome')
+      }
+
+      const data = await response.json()
+      setUnpackedOutcome(data.unpacked)
+    } catch (error) {
+      console.error('Unpack error:', error)
+      toast({
+        title: 'Unpack Failed',
+        description: error instanceof Error ? error.message : 'Please try again',
+        variant: 'destructive',
+      })
+      setUnpackDialogOpen(false)
+    } finally {
+      setUnpacking(false)
+    }
   }
 
   return (
@@ -285,6 +345,7 @@ export function SchemeOfWorkGenerator() {
                 grade={grade}
                 term={term}
                 onGenerateLessonPlan={(row) => setLessonPlanRow(row)}
+                onUnpackOutcome={handleUnpackOutcome}
               />
             </ScrollArea>
           ) : (
@@ -317,6 +378,43 @@ export function SchemeOfWorkGenerator() {
           teacherId={getTeacherId()}
         />
       )}
+
+      <Dialog open={unpackDialogOpen} onOpenChange={setUnpackDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>Unpacked Learning Outcome</DialogTitle>
+            <DialogDescription>
+              {unpackedOutcome
+                ? 'Review the I-Can statements and success criteria derived from this outcome.'
+                : unpacking
+                ? 'Generating measurable learning statements...'
+                : 'No outcome selected.'}
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="max-h-[60vh] py-4">
+            {unpacking ? (
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <span>Unpacking outcome…</span>
+              </div>
+            ) : unpackedOutcome ? (
+              <UnpackedOutcomeRenderer
+                unpackedOutcome={unpackedOutcome}
+                originalOutcome={originalOutcome}
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Select a specific learning outcome from the scheme to unpack it into measurable statements.
+              </p>
+            )}
+          </ScrollArea>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setUnpackDialogOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

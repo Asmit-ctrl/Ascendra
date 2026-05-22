@@ -50,6 +50,74 @@ class ListSchemesRequest(BaseModel):
     subject: Optional[str] = None
 
 
+class GenerateWorksheetRequest(BaseModel):
+    """Request to generate a KSA-balanced worksheet for one SchemeRow.
+
+    The teacher passes the SchemeRow they just generated (camelCase or
+    legacy snake_case keys both work). Output ``worksheet`` matches
+    :class:`agents.scheme.worksheet.Worksheet` — discriminated-union items
+    (fill_blank | short_answer | problem_solving | matching | reflect), each
+    KSA-tagged, plus instructions, extension challenge, and answer key.
+    """
+
+    teacher_id: str
+    row: Dict[str, Any]
+    grade: str
+    subject: str
+    term: Optional[str] = None
+    language: str = "english"
+    duration_minutes: int = 30
+
+
+class GenerateTextLevelerRequest(BaseModel):
+    """Request to generate a grade-leveled passage and comprehension questions.
+
+    Input_text is preferred. If source_url is provided, it is included as
+    metadata for the prompt. At least one of ``input_text`` or ``source_url``
+    is required.
+    """
+
+    teacher_id: str
+    grade: str
+    subject: str
+    language: str = "english"
+    input_text: Optional[str] = None
+    source_url: Optional[str] = None
+
+
+class UnpackOutcomeRequest(BaseModel):
+    """Request to unpack a KICD learning outcome.
+
+    Smallest Tier 1 teacher tool — turns a raw KICD outcome into
+    student-friendly "I can…" statements + measurable success criteria.
+    Output shape matches :class:`agents.unpacker.UnpackedOutcome` (camelCase
+    field names; studio renders directly).
+    """
+
+    teacher_id: str
+    outcome: str
+    grade: str
+    subject: str
+    language: str = "english"
+
+
+class GenerateExamRequest(BaseModel):
+    """Request to generate an end-of-term exam scope-validated against the allocation.
+
+    ``allocation`` is the strand/sub-strand list that defines what's IN scope
+    for the term — typically derived from the saved scheme. ``counts`` is
+    optional and defaults to ``{mcq: 15, short: 8, long: 2}`` to match the TS
+    source (``_inventory/scheme-scribe-ai/supabase/functions/generate-exam/index.ts:343``).
+    """
+
+    teacher_id: str
+    grade: str
+    subject: str
+    term: str
+    allocation: List[Dict[str, Any]]
+    counts: Optional[Dict[str, int]] = None
+
+
 class GenerateLessonPlanRequest(BaseModel):
     """Request to generate one CBC lesson plan from a SchemeRow.
 
@@ -180,6 +248,167 @@ async def generate_lesson_plan(request: GenerateLessonPlanRequest) -> Dict[str, 
         )
         raise HTTPException(
             status_code=500, detail=f"Failed to generate lesson plan: {exc}"
+        )
+
+
+@router.post("/generate-worksheet")
+async def generate_worksheet(request: GenerateWorksheetRequest) -> Dict[str, Any]:
+    """Generate one KSA-balanced printable worksheet for a single SchemeRow.
+
+    Output ``worksheet`` matches :class:`agents.scheme.worksheet.Worksheet`:
+    ``{title, grade, subject, strand, subStrand, duration, instructions,
+    items[discriminated-union], extensionChallenge?, answerKey}``. The
+    studio's worksheet renderer should branch by ``item.type``.
+    """
+    try:
+        agent = LessonArchitectAgent(supabase_client=get_supabase_client())
+        result = await agent.generate_worksheet(
+            teacher_id=request.teacher_id,
+            row=request.row,
+            grade=request.grade,
+            subject=request.subject,
+            term=request.term,
+            language=request.language,
+            duration_minutes=request.duration_minutes,
+        )
+
+        return {
+            "success": True,
+            "worksheet_id": result.get("worksheet_id"),
+            "worksheet": result.get("worksheet", {}),
+            "source": "ai-agents",
+        }
+
+    except Exception as exc:
+        logger.error(
+            "Failed to generate worksheet",
+            error=str(exc),
+            error_type=type(exc).__name__,
+            grade=request.grade,
+            subject=request.subject,
+        )
+        raise HTTPException(
+            status_code=500, detail=f"Failed to generate worksheet: {exc}"
+        )
+
+
+@router.post("/generate-text-leveler")
+async def generate_text_leveler(request: GenerateTextLevelerRequest) -> Dict[str, Any]:
+    """Generate a grade-appropriate reading passage and KSA-aligned questions.
+
+    Output ``leveler`` matches the TextLeveler result contract from the
+    scheme leveler module. Studio clients can render ``passage`` plus the
+    question list and answer guidance.
+    """
+    try:
+        agent = LessonArchitectAgent(supabase_client=get_supabase_client())
+        result = await agent.generate_text_leveler(
+            teacher_id=request.teacher_id,
+            grade=request.grade,
+            subject=request.subject,
+            language=request.language,
+            input_text=request.input_text,
+            source_url=request.source_url,
+        )
+
+        return {
+            "success": True,
+            "leveler_id": result.get("leveler_id"),
+            "leveler": result.get("leveler", {}),
+            "source": "ai-agents",
+        }
+
+    except Exception as exc:
+        logger.error(
+            "Failed to generate text leveler",
+            error=str(exc),
+            error_type=type(exc).__name__,
+            grade=request.grade,
+            subject=request.subject,
+        )
+        raise HTTPException(
+            status_code=500, detail=f"Failed to generate text leveler: {exc}"
+        )
+
+
+@router.post("/unpack-outcome")
+async def unpack_outcome(request: UnpackOutcomeRequest) -> Dict[str, Any]:
+    """Unpack a KICD learning outcome into "I can…" + measurable success criteria.
+
+    Output ``unpacked`` matches :class:`agents.unpacker.UnpackedOutcome`:
+    ``{outcome, grade, subject, iCanStatements[{statement, ksa}],
+    successCriteria[{criterion, observable}], coreCompetencies[], values[]}``.
+    """
+    try:
+        agent = LessonArchitectAgent(supabase_client=get_supabase_client())
+        result = await agent.unpack_outcome(
+            teacher_id=request.teacher_id,
+            outcome=request.outcome,
+            grade=request.grade,
+            subject=request.subject,
+            language=request.language,
+        )
+
+        return {
+            "success": True,
+            "unpacked_id": result.get("unpacked_id"),
+            "unpacked": result.get("unpacked", {}),
+            "source": "ai-agents",
+        }
+
+    except Exception as exc:
+        logger.error(
+            "Failed to unpack outcome",
+            error=str(exc),
+            error_type=type(exc).__name__,
+            grade=request.grade,
+            subject=request.subject,
+        )
+        raise HTTPException(
+            status_code=500, detail=f"Failed to unpack outcome: {exc}"
+        )
+
+
+@router.post("/generate-exam")
+async def generate_exam(request: GenerateExamRequest) -> Dict[str, Any]:
+    """Generate one end-of-term exam, scope-validated against ``allocation``.
+
+    Output shape matches ``_inventory/scheme-scribe-ai/supabase/functions/generate-exam/index.ts``:
+    ``{questions: ExamQuestion[], total_marks, meta: {grade, subject, term, total}}``
+    where each ``ExamQuestion`` is a discriminated union over
+    ``{type: "mcq"|"short"|"long", ...}``. The studio renders by ``type``.
+    """
+    try:
+        agent = LessonArchitectAgent(supabase_client=get_supabase_client())
+        result = await agent.generate_exam(
+            teacher_id=request.teacher_id,
+            grade=request.grade,
+            subject=request.subject,
+            term=request.term,
+            allocation=request.allocation,
+            counts=request.counts,
+        )
+
+        return {
+            "success": True,
+            "exam_id": result.get("exam_id"),
+            "questions": result.get("questions", []),
+            "total_marks": result.get("total_marks", 0),
+            "meta": result.get("meta", {}),
+            "source": "ai-agents",
+        }
+
+    except Exception as exc:
+        logger.error(
+            "Failed to generate exam",
+            error=str(exc),
+            error_type=type(exc).__name__,
+            grade=request.grade,
+            subject=request.subject,
+            term=request.term,
+        )
+        raise HTTPException(
+            status_code=500, detail=f"Failed to generate exam: {exc}"
         )
 
 
