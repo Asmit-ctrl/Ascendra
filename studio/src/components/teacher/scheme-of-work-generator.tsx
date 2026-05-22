@@ -124,9 +124,22 @@ export function SchemeOfWorkGenerator() {
       })
     } catch (error) {
       console.error('Generation error:', error)
+      
+      // Extract error message
+      let errorMessage = 'Please try again'
+      if (error instanceof Error) {
+        errorMessage = error.message
+      }
+      
+      // Check if it's a rate limit error
+      const isRateLimit = errorMessage.toLowerCase().includes('rate limit') || 
+                          errorMessage.includes('429')
+      
       toast({
-        title: 'Generation Failed',
-        description: error instanceof Error ? error.message : 'Please try again',
+        title: isRateLimit ? 'Rate Limit Reached' : 'Generation Failed',
+        description: isRateLimit 
+          ? 'The AI service is temporarily at capacity. Please wait 2-3 minutes and try again. The system will automatically use backup models.'
+          : errorMessage,
         variant: 'destructive',
       })
     } finally {

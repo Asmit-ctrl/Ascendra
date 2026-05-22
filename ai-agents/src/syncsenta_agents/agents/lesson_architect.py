@@ -42,33 +42,81 @@ class _GroqProvider:
         # llama-3.3-70b-versatile is best but has lower rate limits
         # llama-3.1-70b-versatile is fallback with higher limits
         # mixtral-8x7b-32768 is final fallback
-        model = os.getenv("GROQ_MODEL", "llama-3.1-70b-versatile")
+        self.models = [
+            os.getenv("GROQ_MODEL", "llama-3.1-70b-versatile"),
+            "llama-3.1-70b-versatile",
+            "mixtral-8x7b-32768",
+        ]
+        self.current_model_index = 0
         
         self._llm = ChatGroq(
-            model=model,
+            model=self.models[self.current_model_index],
             api_key=os.getenv("GROQ_API_KEY"),
             temperature=0.3,  # Lower temp for more consistent curriculum content
         )
 
-    async def generate(self, prompt: str, *, system: str | None = None) -> str:
+    async def generate(self, prompt: str, *, system: str | None = None, max_retries: int = 3) -> str:
         import asyncio
+        import time
         
         messages = []
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
         
-        try:
-            response = await asyncio.to_thread(self._llm.invoke, messages)
-            return response.content if hasattr(response, 'content') else str(response)
-        except Exception as e:
-            # If rate limit error, provide helpful message
-            if "rate_limit" in str(e).lower() or "429" in str(e):
-                raise AgentError(
-                    "Groq API rate limit reached. Please wait a few minutes and try again. "
-                    "The system will automatically retry with a different model."
-                ) from e
-            raise
+        last_error = None
+        
+        for attempt in range(max_retries):
+            try:
+                response = await asyncio.to_thread(self._llm.invoke, messages)
+                return response.content if hasattr(response, 'content') else str(response)
+            except Exception as e:
+                last_error = e
+                error_str = str(e).lower()
+                
+                # Check if it's a rate limit error
+                if "rate_limit" in error_str or "429" in error_str or "rate limit" in error_str:
+                    # Try fallback model if available
+                    if self.current_model_index < len(self.models) - 1:
+                        self.current_model_index += 1
+                        from langchain_groq import ChatGroq
+                        import os
+                        self._llm = ChatGroq(
+                            model=self.models[self.current_model_index],
+                            api_key=os.getenv("GROQ_API_KEY"),
+                            temperature=0.3,
+                        )
+                        logger.warning(f"Rate limit hit, switching to model: {self.models[self.current_model_index]}")
+                        # Wait a bit before retrying with new model
+                        await asyncio.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s, 4s
+                        continue
+                    else:
+                        # All models exhausted, wait longer
+                        if attempt < max_retries - 1:
+                            wait_time = 5 * (2 ** attempt)  # 5s, 10s, 20s
+                            logger.warning(f"All models rate limited, waiting {wait_time}s before retry {attempt + 1}/{max_retries}")
+                            await asyncio.sleep(wait_time)
+                            # Reset to first model
+                            self.current_model_index = 0
+                            from langchain_groq import ChatGroq
+                            import os
+                            self._llm = ChatGroq(
+                                model=self.models[self.current_model_index],
+                                api_key=os.getenv("GROQ_API_KEY"),
+                                temperature=0.3,
+                            )
+                            continue
+                        else:
+                            raise AgentError(
+                                "Groq API rate limit reached on all available models. "
+                                "Please wait 5-10 minutes and try again, or upgrade your Groq API plan for higher limits."
+                            ) from e
+                else:
+                    # Non-rate-limit error, raise immediately
+                    raise
+        
+        # If we get here, all retries failed
+        raise AgentError(f"Failed after {max_retries} retries: {last_error}") from last_error
 
 
 class SchemeMode(str, Enum):
