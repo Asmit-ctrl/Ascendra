@@ -63,7 +63,7 @@ def _canon_key(key: str) -> str:
 
 
 def _sanitize_escape_sequences(text: str) -> str:
-    """Remove or fix invalid escape sequences that break JSON parsing.
+    r"""Remove or fix invalid escape sequences that break JSON parsing.
     
     LLMs sometimes generate invalid escape sequences like \x, \a, etc.
     This function fixes them before JSON parsing.
