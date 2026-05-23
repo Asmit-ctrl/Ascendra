@@ -85,7 +85,8 @@ class _GroqProvider:
                             api_key=os.getenv("GROQ_API_KEY"),
                             temperature=0.3,
                         )
-                        logger.warning(f"Rate limit hit, switching to model: {self.models[self.current_model_index]}")
+                        # Note: logger not available in this scope, using print for now
+                        print(f"Rate limit hit, switching to model: {self.models[self.current_model_index]}")
                         # Wait a bit before retrying with new model
                         await asyncio.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s, 4s
                         continue
@@ -93,7 +94,7 @@ class _GroqProvider:
                         # All models exhausted, wait longer
                         if attempt < max_retries - 1:
                             wait_time = 5 * (2 ** attempt)  # 5s, 10s, 20s
-                            logger.warning(f"All models rate limited, waiting {wait_time}s before retry {attempt + 1}/{max_retries}")
+                            print(f"All models rate limited, waiting {wait_time}s before retry {attempt + 1}/{max_retries}")
                             await asyncio.sleep(wait_time)
                             # Reset to first model
                             self.current_model_index = 0
