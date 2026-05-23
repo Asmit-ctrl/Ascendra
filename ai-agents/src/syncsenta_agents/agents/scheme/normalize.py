@@ -62,6 +62,27 @@ def _canon_key(key: str) -> str:
     return re.sub(r"[-_\s]", "", key).lower()
 
 
+def _sanitize_escape_sequences(text: str) -> str:
+    """Remove or fix invalid escape sequences that break JSON parsing.
+    
+    LLMs sometimes generate invalid escape sequences like \x, \a, etc.
+    This function fixes them before JSON parsing.
+    """
+    # Replace invalid escape sequences with escaped backslash
+    # Valid JSON escapes are: \", \\, \/, \b, \f, \n, \r, \t, \uXXXX
+    # Everything else should have the backslash escaped
+    def fix_escape(match):
+        char = match.group(1)
+        # Keep valid JSON escapes
+        if char in ('"', '\\', '/', 'b', 'f', 'n', 'r', 't', 'u'):
+            return match.group(0)
+        # Escape the backslash for invalid sequences
+        return '\\\\' + char
+    
+    # Match backslash followed by any character
+    return re.sub(r'\\(.)', fix_escape, text)
+
+
 def extract_json_array(raw: str) -> List[Dict[str, Any]]:
     r"""Parse an LLM response into a list of raw row dicts.
 
@@ -92,10 +113,13 @@ def extract_json_array(raw: str) -> List[Dict[str, Any]]:
     # Happy path: complete array.
     if end > start:
         try:
-            parsed = json.loads(cleaned[start : end + 1])
+            # Sanitize escape sequences before parsing
+            sanitized = _sanitize_escape_sequences(cleaned[start : end + 1])
+            parsed = json.loads(sanitized)
             if isinstance(parsed, list):
                 return parsed
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as exc:
+            log.warning(f"JSON parse failed on complete array: {exc}")
             pass  # fall through to recovery
 
     # Truncated — recover up to the last complete object.
@@ -113,7 +137,9 @@ def extract_json_array(raw: str) -> List[Dict[str, Any]]:
     repaired = re.sub(r",\s*]", "]", repaired)
 
     try:
-        items = json.loads(repaired)
+        # Sanitize escape sequences before parsing
+        sanitized = _sanitize_escape_sequences(repaired)
+        items = json.loads(sanitized)
     except json.JSONDecodeError as exc:
         raise ValueError(f"Cannot recover truncated JSON: {exc}") from exc
 
