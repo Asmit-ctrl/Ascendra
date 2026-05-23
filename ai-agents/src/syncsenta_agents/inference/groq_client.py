@@ -33,7 +33,7 @@ class GroqClient:
     
     def __init__(self, api_key: str = None, model: str = None):
         self.api_key = api_key or os.getenv("GROQ_API_KEY")
-        self.model = model or os.getenv("GROQ_MODEL", "llama-3.1-70b-versatile")
+        self.model = model or os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
         self.base_url = "https://api.groq.com/openai/v1"
         self.logger = AgentLogger("groq_client")
         self.session: Optional[aiohttp.ClientSession] = None
@@ -205,10 +205,12 @@ class GroqClient:
 
 # Available Groq models
 GROQ_MODELS = {
-    # Llama 3.1 models (RECOMMENDED)
-    "llama-3.1-405b-reasoning": "Meta Llama 3.1 405B (best quality, slower)",
-    "llama-3.1-70b-versatile": "Meta Llama 3.1 70B (balanced, RECOMMENDED)",
-    "llama-3.1-8b-instant": "Meta Llama 3.1 8B (fastest)",
+    # Llama 3.3 models (CURRENT - RECOMMENDED)
+    "llama-3.3-70b-versatile": "Meta Llama 3.3 70B (balanced, RECOMMENDED)",
+    
+    # Llama 3.1 models (DEPRECATED)
+    "llama-3.1-405b-reasoning": "Meta Llama 3.1 405B (DEPRECATED)",
+    "llama-3.1-8b-instant": "Meta Llama 3.1 8B (DEPRECATED)",
     
     # Mixtral models
     "mixtral-8x7b-32768": "Mixtral 8x7B (good for long context)",
@@ -234,11 +236,11 @@ def get_recommended_model(task: str = "general") -> str:
     """
     
     recommendations = {
-        "general": "llama-3.1-70b-versatile",
-        "tutoring": "llama-3.1-70b-versatile",  # Best quality for education
-        "assessment": "llama-3.1-8b-instant",   # Fast for quiz generation
+        "general": "llama-3.3-70b-versatile",
+        "tutoring": "llama-3.3-70b-versatile",  # Best quality for education
+        "assessment": "mixtral-8x7b-32768",     # Fast for quiz generation
         "translation": "mixtral-8x7b-32768",    # Good multilingual
-        "fast": "llama-3.1-8b-instant",         # Fastest responses
+        "fast": "mixtral-8x7b-32768",           # Fastest responses
     }
     
-    return recommendations.get(task, "llama-3.1-70b-versatile")
+    return recommendations.get(task, "llama-3.3-70b-versatile")

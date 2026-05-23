@@ -39,12 +39,11 @@ class _GroqProvider:
         from langchain_groq import ChatGroq
         
         # Try multiple models in order of preference
-        # llama-3.3-70b-versatile is best but has lower rate limits
-        # llama-3.1-70b-versatile is fallback with higher limits
-        # mixtral-8x7b-32768 is final fallback
+        # llama-3.3-70b-versatile is best and current
+        # mixtral-8x7b-32768 is fallback
         self.models = [
-            os.getenv("GROQ_MODEL", "llama-3.1-70b-versatile"),
-            "llama-3.1-70b-versatile",
+            os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+            "llama-3.3-70b-versatile",
             "mixtral-8x7b-32768",
         ]
         self.current_model_index = 0
