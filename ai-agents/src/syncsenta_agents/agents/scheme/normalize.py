@@ -125,46 +125,79 @@ def extract_json_array(raw: str) -> List[Dict[str, Any]]:
     # Truncated — recover up to the last complete object.
     log.warning("Scheme response appears truncated, attempting recovery")
     partial = cleaned[start:]
-    last_brace = partial.rfind("}")
-    if last_brace <= 0:
-        raise ValueError("No parseable JSON found in response")
-
-    repaired = partial[: last_brace + 1]
-    repaired = re.sub(r",\s*$", "", repaired)
-    repaired = repaired + "]"
-    # Trailing commas inside the last object / array slot.
-    repaired = re.sub(r",\s*}", "}", repaired)
-    repaired = re.sub(r",\s*]", "]", repaired)
-
-    try:
-        # Sanitize escape sequences before parsing
-        sanitized = _sanitize_escape_sequences(repaired)
-        items = json.loads(sanitized)
-    except json.JSONDecodeError as exc:
-        # Log the problematic JSON for debugging
-        log.error("JSON recovery failed. First 500 chars of repaired JSON: %s", repaired[:500])
-        log.error("JSON decode error: %s", exc)
-        # Try one more aggressive fix: remove incomplete last object
+    
+    # Try multiple recovery strategies
+    for strategy_num in range(3):
         try:
-            # Find second-to-last closing brace
-            second_last = repaired[:last_brace].rfind("}")
-            if second_last > 0:
-                repaired2 = repaired[:second_last + 1] + "]"
-                repaired2 = re.sub(r",\s*}", "}", repaired2)
-                repaired2 = re.sub(r",\s*]", "]", repaired2)
-                sanitized2 = _sanitize_escape_sequences(repaired2)
-                items = json.loads(sanitized2)
-                log.warning("Recovered using second-to-last object")
+            if strategy_num == 0:
+                # Strategy 1: Use last complete object
+                last_brace = partial.rfind("}")
+                if last_brace <= 0:
+                    continue
+                repaired = partial[: last_brace + 1]
+            elif strategy_num == 1:
+                # Strategy 2: Use second-to-last complete object
+                last_brace = partial.rfind("}")
+                if last_brace <= 0:
+                    continue
+                second_last = partial[:last_brace].rfind("}")
+                if second_last <= 0:
+                    continue
+                repaired = partial[: second_last + 1]
             else:
+                # Strategy 3: Find all complete objects and take the valid ones
+                objects = []
+                depth = 0
+                obj_start = -1
+                for i, char in enumerate(partial):
+                    if char == '{':
+                        if depth == 0:
+                            obj_start = i
+                        depth += 1
+                    elif char == '}':
+                        depth -= 1
+                        if depth == 0 and obj_start >= 0:
+                            try:
+                                obj_str = partial[obj_start:i+1]
+                                obj_str = _sanitize_escape_sequences(obj_str)
+                                json.loads(obj_str)  # Validate
+                                objects.append(obj_str)
+                            except:
+                                pass
+                            obj_start = -1
+                
+                if not objects:
+                    raise ValueError("No valid objects found")
+                
+                repaired = "[" + ",".join(objects) + "]"
+                # Already sanitized and validated, parse directly
+                items = json.loads(repaired)
+                if isinstance(items, list) and len(items) > 0:
+                    log.warning("Recovered %d items using strategy 3", len(items))
+                    return items
+                continue
+            
+            # Clean up trailing commas and close array
+            repaired = re.sub(r",\s*$", "", repaired)
+            repaired = repaired + "]"
+            repaired = re.sub(r",\s*}", "}", repaired)
+            repaired = re.sub(r",\s*]", "]", repaired)
+            
+            # Sanitize and parse
+            sanitized = _sanitize_escape_sequences(repaired)
+            items = json.loads(sanitized)
+            
+            if isinstance(items, list) and len(items) > 0:
+                log.warning("Recovered %d items using strategy %d", len(items), strategy_num + 1)
+                return items
+                
+        except (json.JSONDecodeError, ValueError) as exc:
+            if strategy_num == 2:  # Last strategy failed
+                log.error("All recovery strategies failed. Last error: %s", exc)
                 raise ValueError("Cannot recover truncated JSON: {}".format(exc)) from exc
-        except (json.JSONDecodeError, ValueError):
-            raise ValueError("Cannot recover truncated JSON: {}".format(exc)) from exc
-
-    if not isinstance(items, list):
-        raise ValueError("Recovered JSON was not an array")
-
-    log.warning("Recovered %d items from truncated response", len(items))
-    return items
+            continue
+    
+    raise ValueError("No parseable JSON found in response")
 
 
 def normalize_row_keys(raw: Dict[str, Any]) -> SchemeRow:
