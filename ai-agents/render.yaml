@@ -2,8 +2,8 @@ services:
   - type: web
     name: syncsenta-ai-backend
     runtime: python
-    buildCommand: pip install -e .
-    startCommand: python -m syncsenta_agents.main
+    buildCommand: pip install -r requirements.txt
+    startCommand: PYTHONPATH=src uvicorn syncsenta_agents.api.server:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: GROQ_API_KEY
         sync: false
@@ -15,8 +15,6 @@ services:
         value: https://mwalimu-ai.vercel.app
       - key: GROQ_MODEL
         value: llama-3.3-70b-versatile
-      - key: PORT
-        value: 8001
     healthCheckPath: /healthz
 
   - type: cron
