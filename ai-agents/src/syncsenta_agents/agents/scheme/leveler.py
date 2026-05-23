@@ -18,8 +18,8 @@ from typing import Literal, Optional, Protocol
 
 from pydantic import BaseModel, Field, ValidationError
 
-from .scheme.batched import RateLimitError
-from .scheme.guardrails import (
+from .batched import RateLimitError
+from .guardrails import (
     _ATTITUDE_VERBS_EN,
     _ATTITUDE_VERBS_SW,
     _KNOWLEDGE_VERBS_EN,
