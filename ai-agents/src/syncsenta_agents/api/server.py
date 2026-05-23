@@ -140,14 +140,19 @@ async def get_orchestrator() -> SyncSentaOrchestrator:
 
 @app.on_event("startup")
 async def _warm_orchestrator() -> None:
-    # Pay the LangGraph + agent-registry boot cost once at server start so
-    # the first /agents/chat request doesn't take the hit.
+    # Don't block startup - initialize orchestrator in background
+    # The first request will trigger lazy initialization if needed
+    import asyncio
+    asyncio.create_task(_initialize_orchestrator_background())
+
+
+async def _initialize_orchestrator_background() -> None:
+    """Initialize orchestrator in background without blocking startup."""
     try:
         await get_orchestrator()
-    except Exception:
-        # Don't block server startup on orchestrator init — get_orchestrator
-        # will retry lazily on first request and surface the error there.
-        pass
+        logger.info("Background orchestrator initialization complete")
+    except Exception as exc:
+        logger.error(f"Background orchestrator initialization failed: {exc}")
 
 
 # ---------------------------------------------------------------------------
