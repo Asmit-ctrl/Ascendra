@@ -208,12 +208,9 @@ GROQ_MODELS = {
     # Llama 3.3 models (CURRENT - RECOMMENDED)
     "llama-3.3-70b-versatile": "Meta Llama 3.3 70B (balanced, RECOMMENDED)",
     
-    # Llama 3.1 models (DEPRECATED)
-    "llama-3.1-405b-reasoning": "Meta Llama 3.1 405B (DEPRECATED)",
-    "llama-3.1-8b-instant": "Meta Llama 3.1 8B (DEPRECATED)",
-    
-    # Mixtral models
-    "mixtral-8x7b-32768": "Mixtral 8x7B (good for long context)",
+    # Llama 3.1 models
+    "llama-3.1-405b-reasoning": "Meta Llama 3.1 405B",
+    "llama-3.1-8b-instant": "Meta Llama 3.1 8B (fast fallback)",
     
     # Gemma models
     "gemma2-9b-it": "Google Gemma 2 9B (instruction-tuned)",
