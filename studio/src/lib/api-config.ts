@@ -57,6 +57,8 @@ export const API_ENDPOINTS = {
   LESSON_ARCHITECT_GENERATE_WORKSHEET: '/lesson-architect/generate-worksheet',
   LESSON_ARCHITECT_GENERATE_TEXT_LEVELER: '/lesson-architect/generate-text-leveler',
   LESSON_ARCHITECT_UNPACK_OUTCOME: '/lesson-architect/unpack-outcome',
+  LESSON_ARCHITECT_GENERATE_DIFFERENTIATION: '/lesson-architect/generate-differentiation',
+  LESSON_ARCHITECT_GENERATE_EXAM: '/lesson-architect/generate-exam',
   LESSON_ARCHITECT_SCHEMES: '/lesson-architect/schemes',
 
 

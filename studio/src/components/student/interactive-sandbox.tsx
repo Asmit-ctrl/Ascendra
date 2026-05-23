@@ -1,30 +1,139 @@
 "use client"
 
-import { useRef, useEffect, useState, useCallback } from 'react'
+/**
+ * InteractiveSandbox — Phase 1 of the MeTTa Cognitive Data Streams pillar.
+ *
+ * The sandbox is the foundation of the entire adaptive-learning system
+ * (see `.kiro/METTA_KEY_INSIGHTS.md`): without it, chat-only interaction
+ * produces no behavioural signal, and Phase 2 (Analysis/Intervention
+ * agents) has nothing to read.
+ *
+ * What this component captures, end-to-end:
+ *
+ *   1. Dwell time   — hover-over-target intervals, per target.
+ *   2. Pathing      — ordered sequence of clicks/drags so the path can
+ *                     be replayed and classified (linear/exploratory/
+ *                     circular).
+ *   3. Erasure rate — undo + erase events vs. constructive actions.
+ *   4. Tool usage   — which manipulative the learner picked, and how
+ *                     often they switched.
+ *
+ * Two activity types ship in this first cut:
+ *
+ *   - `fractions`   — drag fraction bars into an answer box.
+ *   - `counting`    — drag counting tokens to match a target number.
+ *
+ * The component stays self-contained: it owns its canvas, hit-tests in
+ * canvas-space, and POSTs the full batch to `/telemetry/capture` on
+ * submit. The backend persists raw events + behavioural profile + xAPI
+ * statements (see `ai-agents/.../telemetry_api.py`) — the frontend does
+ * not need to know about that.
+ */
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, RotateCcw, Send } from 'lucide-react'
+import { Loader2, RotateCcw, Send, Eraser, Sparkles } from 'lucide-react'
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/api-config'
 
-interface TelemetryEvent {
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export type SandboxActivityType = 'fractions' | 'counting'
+
+export interface TelemetryEvent {
   timestamp: number
-  event_type: string
+  event_type:
+    | 'click'
+    | 'hover'
+    | 'drag'
+    | 'drop'
+    | 'undo'
+    | 'erase'
+    | 'tool_select'
+    | 'object_modify'
+    | 'submit'
+    | 'input'
   target: string
   position?: [number, number]
   duration?: number
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
+}
+
+interface DraggableToken {
+  id: string
+  label: string
+  value: number              // numeric meaning of the token (e.g. 0.5 for 1/2)
+  x: number
+  y: number
+  w: number
+  h: number
+  color: string
+  inDropZone: boolean        // true once the learner has dragged it into the answer box
 }
 
 interface InteractiveSandboxProps {
-  activityType: string
+  activityType: SandboxActivityType
   competency: string
   grade: string
   subject: string
   question: string
-  correctAnswer: string
-  onComplete?: (result: any) => void
+  /**
+   * Numeric correct answer. The sandbox computes the student's answer
+   * from the dropped tokens (sum of values) and compares with a small
+   * tolerance.
+   */
+  correctAnswerValue: number
+  /** Display label, e.g. "3/4" or "5". Not used for grading. */
+  correctAnswerLabel?: string
+  studentId?: string
+  onComplete?: (result: unknown) => void
 }
+
+// ---------------------------------------------------------------------------
+// Activity definitions
+// ---------------------------------------------------------------------------
+
+const DROP_ZONE = { x: 360, y: 90, w: 180, h: 110 }
+
+function makeFractionTokens(): DraggableToken[] {
+  return [
+    { id: 'frac_1_2', label: '1/2', value: 0.5, x: 40, y: 40, w: 110, h: 60, color: '#3b82f6', inDropZone: false },
+    { id: 'frac_1_3', label: '1/3', value: 1 / 3, x: 40, y: 110, w: 90, h: 60, color: '#8b5cf6', inDropZone: false },
+    { id: 'frac_1_4', label: '1/4', value: 0.25, x: 40, y: 180, w: 70, h: 60, color: '#10b981', inDropZone: false },
+    { id: 'frac_1_6', label: '1/6', value: 1 / 6, x: 160, y: 40, w: 50, h: 60, color: '#f59e0b', inDropZone: false },
+    { id: 'frac_1_8', label: '1/8', value: 0.125, x: 160, y: 110, w: 40, h: 60, color: '#ef4444', inDropZone: false },
+    { id: 'frac_1_12', label: '1/12', value: 1 / 12, x: 160, y: 180, w: 36, h: 60, color: '#ec4899', inDropZone: false },
+  ]
+}
+
+function makeCountingTokens(): DraggableToken[] {
+  const tokens: DraggableToken[] = []
+  for (let i = 0; i < 10; i++) {
+    tokens.push({
+      id: `count_${i}`,
+      label: '●',
+      value: 1,
+      x: 50 + (i % 5) * 50,
+      y: 50 + Math.floor(i / 5) * 70,
+      w: 40,
+      h: 40,
+      color: '#0ea5e9',
+      inDropZone: false,
+    })
+  }
+  return tokens
+}
+
+function makeInitialTokens(type: SandboxActivityType): DraggableToken[] {
+  return type === 'fractions' ? makeFractionTokens() : makeCountingTokens()
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
 export function InteractiveSandbox({
   activityType,
@@ -32,262 +141,390 @@ export function InteractiveSandbox({
   grade,
   subject,
   question,
-  correctAnswer,
-  onComplete
+  correctAnswerValue,
+  correctAnswerLabel,
+  studentId,
+  onComplete,
 }: InteractiveSandboxProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [events, setEvents] = useState<TelemetryEvent[]>([])
+  const [tokens, setTokens] = useState<DraggableToken[]>(() => makeInitialTokens(activityType))
+  // Undo stack — full token snapshots before each constructive action.
+  // Snapshots-not-deltas is intentional: easier to test, and the
+  // sandbox is small enough that memory doesn't matter.
+  const undoStack = useRef<DraggableToken[][]>([])
+  const events = useRef<TelemetryEvent[]>([])
+  const sessionId = useMemo(() => `sess_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, [])
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [studentAnswer, setStudentAnswer] = useState('')
-  const [hoverStart, setHoverStart] = useState<number | null>(null)
-  const [sessionId] = useState(`session_${Date.now()}`)
-  
-  // Capture telemetry event
-  const captureEvent = useCallback((
-    eventType: string,
-    target: string,
-    position?: [number, number],
-    duration?: number,
-    metadata?: Record<string, any>
-  ) => {
-    const event: TelemetryEvent = {
-      timestamp: Date.now(),
-      event_type: eventType,
-      target,
-      position,
-      duration,
-      metadata
-    }
-    
-    setEvents(prev => [...prev, event])
-    console.log('Telemetry event:', event)
+  const [feedback, setFeedback] = useState<string | null>(null)
+  // Drag state — held in a ref because we don't want to re-render on
+  // every pointer-move; canvas redraws are driven directly.
+  const drag = useRef<{
+    tokenId: string | null
+    offsetX: number
+    offsetY: number
+    startedAt: number
+    pathPoints: number
+  }>({ tokenId: null, offsetX: 0, offsetY: 0, startedAt: 0, pathPoints: 0 })
+  // Hover tracker — per-target dwell times.
+  const hover = useRef<{ target: string | null; enteredAt: number }>({ target: null, enteredAt: 0 })
+  const [eventCount, setEventCount] = useState(0)
+
+  const resolvedStudentId =
+    studentId ||
+    (typeof window !== 'undefined' && (localStorage.getItem('studentId') || localStorage.getItem('userId'))) ||
+    'student_demo'
+
+  // ----- Event helpers -----------------------------------------------------
+
+  const captureEvent = useCallback((evt: TelemetryEvent) => {
+    events.current.push(evt)
+    // Cheap state bump so the badge updates; the events array itself
+    // stays in a ref to avoid render storms during a drag.
+    setEventCount(events.current.length)
   }, [])
-  
-  // Initialize canvas
-  useEffect(() => {
+
+  // ----- Canvas drawing ----------------------------------------------------
+
+  const draw = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    
-    // Set canvas size
-    canvas.width = canvas.offsetWidth
-    canvas.height = canvas.offsetHeight
-    
-    // Draw initial state (example: fraction bars)
-    drawFractionBars(ctx, canvas.width, canvas.height)
-  }, [])
-  
-  const drawFractionBars = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
-    ctx.clearRect(0, 0, width, height)
-    
-    // Draw 1/2 fraction bar
-    ctx.fillStyle = '#3b82f6'
-    ctx.fillRect(50, 50, 200, 60)
-    ctx.fillStyle = '#ffffff'
-    ctx.font = '24px Arial'
-    ctx.fillText('1/2', 130, 85)
-    
-    // Draw 1/4 fraction bar
-    ctx.fillStyle = '#10b981'
-    ctx.fillRect(50, 150, 100, 60)
-    ctx.fillStyle = '#ffffff'
-    ctx.fillText('1/4', 80, 185)
-    
-    // Draw answer box
-    ctx.strokeStyle = '#6b7280'
+
+    // Resize backing store to match the CSS size each frame so the
+    // sandbox stays sharp through parent layout changes.
+    const dpr = window.devicePixelRatio || 1
+    if (canvas.width !== canvas.offsetWidth * dpr || canvas.height !== canvas.offsetHeight * dpr) {
+      canvas.width = canvas.offsetWidth * dpr
+      canvas.height = canvas.offsetHeight * dpr
+      ctx.scale(dpr, dpr)
+    }
+
+    const w = canvas.offsetWidth
+    const h = canvas.offsetHeight
+    ctx.clearRect(0, 0, w, h)
+
+    // Drop zone (right side).
+    ctx.strokeStyle = '#94a3b8'
+    ctx.setLineDash([6, 4])
     ctx.lineWidth = 2
-    ctx.strokeRect(350, 100, 150, 80)
-    ctx.fillStyle = '#6b7280'
-    ctx.font = '16px Arial'
-    ctx.fillText('Drop answer here', 360, 145)
-  }
-  
-  // Handle canvas interactions
-  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    
-    const rect = canvas.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
-    
-    // Detect which element was clicked
-    let target = 'canvas_background'
-    if (x >= 50 && x <= 250 && y >= 50 && y <= 110) {
-      target = 'fraction_1_2'
-    } else if (x >= 50 && x <= 150 && y >= 150 && y <= 210) {
-      target = 'fraction_1_4'
-    } else if (x >= 350 && x <= 500 && y >= 100 && y <= 180) {
-      target = 'answer_box'
+    ctx.strokeRect(DROP_ZONE.x, DROP_ZONE.y, DROP_ZONE.w, DROP_ZONE.h)
+    ctx.setLineDash([])
+    ctx.fillStyle = '#64748b'
+    ctx.font = '13px ui-sans-serif, system-ui'
+    ctx.fillText('Drop your answer here', DROP_ZONE.x + 28, DROP_ZONE.y + DROP_ZONE.h / 2 + 4)
+
+    // Tokens.
+    for (const t of tokens) {
+      ctx.fillStyle = t.color
+      ctx.fillRect(t.x, t.y, t.w, t.h)
+      ctx.fillStyle = '#ffffff'
+      ctx.font = activityType === 'counting' ? '24px ui-sans-serif, system-ui' : 'bold 18px ui-sans-serif, system-ui'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(t.label, t.x + t.w / 2, t.y + t.h / 2)
     }
-    
-    captureEvent('click', target, [x, y])
+    ctx.textAlign = 'start'
+    ctx.textBaseline = 'alphabetic'
+  }, [tokens, activityType])
+
+  useEffect(() => {
+    draw()
+  }, [draw])
+
+  // ----- Hit testing -------------------------------------------------------
+
+  const hitTest = useCallback(
+    (x: number, y: number): DraggableToken | null => {
+      for (let i = tokens.length - 1; i >= 0; i--) {
+        const t = tokens[i]
+        if (x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h) return t
+      }
+      return null
+    },
+    [tokens],
+  )
+
+  const inDropZone = (token: DraggableToken) => {
+    const cx = token.x + token.w / 2
+    const cy = token.y + token.h / 2
+    return (
+      cx >= DROP_ZONE.x &&
+      cx <= DROP_ZONE.x + DROP_ZONE.w &&
+      cy >= DROP_ZONE.y &&
+      cy <= DROP_ZONE.y + DROP_ZONE.h
+    )
   }
-  
-  const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    
-    const rect = canvas.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
-    
-    // Detect hover target
-    let target = 'canvas_background'
-    if (x >= 50 && x <= 250 && y >= 50 && y <= 110) {
-      target = 'fraction_1_2'
-    } else if (x >= 50 && x <= 150 && y >= 150 && y <= 210) {
-      target = 'fraction_1_4'
-    } else if (x >= 350 && x <= 500 && y >= 100 && y <= 180) {
-      target = 'answer_box'
+
+  // ----- Pointer handlers --------------------------------------------------
+
+  const localCoords = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const r = canvasRef.current!.getBoundingClientRect()
+    return { x: e.clientX - r.left, y: e.clientY - r.top }
+  }
+
+  const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const { x, y } = localCoords(e)
+    const hit = hitTest(x, y)
+    if (!hit) {
+      captureEvent({
+        timestamp: Date.now(),
+        event_type: 'click',
+        target: 'canvas_background',
+        position: [x, y],
+      })
+      return
     }
-    
-    // Start hover timer
-    if (!hoverStart) {
-      setHoverStart(Date.now())
+    // Snapshot for undo BEFORE the drag mutates anything.
+    undoStack.current.push(JSON.parse(JSON.stringify(tokens)))
+    drag.current = {
+      tokenId: hit.id,
+      offsetX: x - hit.x,
+      offsetY: y - hit.y,
+      startedAt: Date.now(),
+      pathPoints: 0,
+    }
+    captureEvent({
+      timestamp: Date.now(),
+      event_type: 'click',
+      target: hit.id,
+      position: [x, y],
+      metadata: { activity_type: activityType, value: hit.value },
+    })
+    canvasRef.current?.setPointerCapture(e.pointerId)
+  }
+
+  const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const { x, y } = localCoords(e)
+
+    // Hover tracking — per-target dwell. Emitted on exit so we get the
+    // duration alongside the target name.
+    const hit = hitTest(x, y)
+    const target = hit ? hit.id : 'canvas_background'
+    if (hover.current.target !== target) {
+      if (hover.current.target && hover.current.target !== 'canvas_background') {
+        captureEvent({
+          timestamp: Date.now(),
+          event_type: 'hover',
+          target: hover.current.target,
+          duration: Date.now() - hover.current.enteredAt,
+        })
+      }
+      hover.current = { target, enteredAt: Date.now() }
+    }
+
+    // Drag — update token position and redraw immediately.
+    if (drag.current.tokenId) {
+      drag.current.pathPoints += 1
+      setTokens((prev) =>
+        prev.map((t) =>
+          t.id === drag.current.tokenId
+            ? { ...t, x: x - drag.current.offsetX, y: y - drag.current.offsetY }
+            : t,
+        ),
+      )
     }
   }
-  
-  const handleCanvasMouseLeave = () => {
-    // End hover and capture duration
-    if (hoverStart) {
-      const duration = Date.now() - hoverStart
-      captureEvent('hover', 'canvas', undefined, duration)
-      setHoverStart(null)
-    }
+
+  const onPointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!drag.current.tokenId) return
+    const { x, y } = localCoords(e)
+    const draggedId = drag.current.tokenId
+    const dragDurationMs = Date.now() - drag.current.startedAt
+    const pathPoints = drag.current.pathPoints
+    drag.current = { tokenId: null, offsetX: 0, offsetY: 0, startedAt: 0, pathPoints: 0 }
+
+    // Did the token end up in the drop zone? Update inDropZone flag.
+    setTokens((prev) =>
+      prev.map((t) => (t.id === draggedId ? { ...t, inDropZone: inDropZone(t) } : t)),
+    )
+
+    captureEvent({
+      timestamp: Date.now(),
+      event_type: 'drag',
+      target: draggedId,
+      position: [x, y],
+      duration: dragDurationMs,
+      metadata: { path_points: pathPoints },
+    })
+
+    // Look up the latest version of the dragged token (post-state-update)
+    // to decide drop vs object_modify. We can't read it from `tokens`
+    // here because setTokens above is async — peek using localCoords
+    // against the current event position instead.
+    const droppedInZone =
+      x >= DROP_ZONE.x &&
+      x <= DROP_ZONE.x + DROP_ZONE.w &&
+      y >= DROP_ZONE.y &&
+      y <= DROP_ZONE.y + DROP_ZONE.h
+    captureEvent({
+      timestamp: Date.now(),
+      event_type: droppedInZone ? 'drop' : 'object_modify',
+      target: droppedInZone ? 'answer_box' : draggedId,
+      position: [x, y],
+    })
   }
-  
+
+  const onPointerLeave = () => {
+    if (hover.current.target && hover.current.target !== 'canvas_background') {
+      captureEvent({
+        timestamp: Date.now(),
+        event_type: 'hover',
+        target: hover.current.target,
+        duration: Date.now() - hover.current.enteredAt,
+      })
+    }
+    hover.current = { target: null, enteredAt: 0 }
+  }
+
+  // ----- Toolbar actions ---------------------------------------------------
+
   const handleUndo = () => {
-    captureEvent('undo', 'undo_button')
-    // Implement undo logic
+    captureEvent({ timestamp: Date.now(), event_type: 'undo', target: 'undo_button' })
+    const snap = undoStack.current.pop()
+    if (snap) setTokens(snap)
   }
-  
+
+  const handleClear = () => {
+    // "Clear" is a hard erase — counts toward the erasure rate signal.
+    captureEvent({ timestamp: Date.now(), event_type: 'erase', target: 'clear_button' })
+    undoStack.current.push(JSON.parse(JSON.stringify(tokens)))
+    setTokens(makeInitialTokens(activityType))
+    setFeedback(null)
+  }
+
   const handleSubmit = async () => {
-    captureEvent('submit', 'submit_button')
+    // Compute student's answer from tokens currently inside the drop zone.
+    const droppedTokens = tokens.filter((t) => inDropZone(t))
+    const studentAnswerValue = droppedTokens.reduce((sum, t) => sum + t.value, 0)
+    const studentAnswerLabel = droppedTokens.map((t) => t.label).join(' + ') || '(empty)'
+
+    captureEvent({
+      timestamp: Date.now(),
+      event_type: 'submit',
+      target: 'submit_button',
+      metadata: {
+        student_answer_value: studentAnswerValue,
+        student_answer_label: studentAnswerLabel,
+        tokens_in_zone: droppedTokens.length,
+      },
+    })
+
     setIsSubmitting(true)
-    
+    setFeedback(null)
     try {
-      // Send telemetry to backend
-      const response = await fetch(buildApiUrl(API_ENDPOINTS.TELEMETRY_CAPTURE), {
+      const res = await fetch(buildApiUrl(API_ENDPOINTS.TELEMETRY_CAPTURE), {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           session_id: sessionId,
-          student_id: 'student_001', // TODO: Get from auth
+          student_id: resolvedStudentId,
           activity_type: activityType,
-          competency: competency,
-          grade: grade,
-          subject: subject,
-          events: events,
+          competency,
+          grade,
+          subject,
+          events: events.current,
           activity_data: {
-            question: question,
-            correct_answer: correctAnswer,
-            student_answer: studentAnswer
-          }
-        })
+            question,
+            correct_answer: correctAnswerLabel ?? String(correctAnswerValue),
+            correct_answer_value: correctAnswerValue,
+            student_answer: studentAnswerLabel,
+            student_answer_value: studentAnswerValue,
+          },
+        }),
       })
-      
-      const result = await response.json()
-      console.log('Telemetry analysis:', result)
-      
-      if (onComplete) {
-        onComplete(result)
-      }
-      
-    } catch (error) {
-      console.error('Failed to submit telemetry:', error)
+      const data = await res.json().catch(() => ({}))
+
+      // Quick local feedback. The richer "you have a misconception about
+      // common-denominator addition" feedback comes from the backend
+      // analysis pipeline — we surface it to the teacher dashboard,
+      // not the student directly.
+      const correct = Math.abs(studentAnswerValue - correctAnswerValue) < 1e-3
+      setFeedback(
+        correct
+          ? `✅ Correct! ${studentAnswerLabel} = ${correctAnswerLabel ?? correctAnswerValue}`
+          : `🤔 You answered ${studentAnswerLabel} (${studentAnswerValue.toFixed(3)}). Try again.`,
+      )
+
+      onComplete?.(data)
+    } catch (err) {
+      console.error('Telemetry submit failed:', err)
+      setFeedback('Could not reach the tutor — your work is saved locally.')
     } finally {
       setIsSubmitting(false)
     }
   }
-  
+
+  // ----- Render ------------------------------------------------------------
+
   return (
     <Card className="w-full">
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <div>
-            <CardTitle>{question}</CardTitle>
+            <CardTitle className="text-lg">{question}</CardTitle>
             <p className="text-sm text-muted-foreground mt-1">
               {grade} • {subject} • {competency}
             </p>
           </div>
-          <Badge variant="outline">
-            {events.length} interactions
-          </Badge>
+          <div className="flex flex-col items-end gap-1">
+            <Badge variant="outline" className="gap-1">
+              <Sparkles className="h-3 w-3" />
+              {eventCount} signals
+            </Badge>
+            <span className="text-xs text-muted-foreground">
+              {sessionId.slice(-8)}
+            </span>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Interactive Canvas */}
         <div className="relative">
           <canvas
             ref={canvasRef}
-            className="w-full h-[300px] border border-border rounded-lg cursor-pointer bg-background"
-            onClick={handleCanvasClick}
-            onMouseMove={handleCanvasMouseMove}
-            onMouseLeave={handleCanvasMouseLeave}
-          />
-          <div className="absolute top-2 right-2 text-xs text-muted-foreground bg-background/80 px-2 py-1 rounded">
-            Session: {sessionId.slice(-8)}
-          </div>
-        </div>
-        
-        {/* Answer Input */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Your Answer:</label>
-          <input
-            type="text"
-            value={studentAnswer}
-            onChange={(e) => {
-              setStudentAnswer(e.target.value)
-              captureEvent('input', 'answer_input', undefined, undefined, {
-                value: e.target.value
-              })
-            }}
-            className="w-full px-3 py-2 border border-border rounded-md"
-            placeholder="Enter your answer..."
+            className="w-full h-[280px] border border-border rounded-lg bg-background touch-none"
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+            onPointerLeave={onPointerLeave}
           />
         </div>
-        
-        {/* Actions */}
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={handleUndo}
-            disabled={isSubmitting}
-          >
+
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={handleUndo} disabled={isSubmitting}>
             <RotateCcw className="h-4 w-4 mr-2" />
             Undo
           </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={isSubmitting || !studentAnswer}
-            className="flex-1"
-          >
+          <Button variant="outline" onClick={handleClear} disabled={isSubmitting}>
+            <Eraser className="h-4 w-4 mr-2" />
+            Clear
+          </Button>
+          <Button onClick={handleSubmit} disabled={isSubmitting} className="flex-1 min-w-[160px]">
             {isSubmitting ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Analyzing...
+                Analysing…
               </>
             ) : (
               <>
                 <Send className="h-4 w-4 mr-2" />
-                Submit Answer
+                Submit answer
               </>
             )}
           </Button>
         </div>
-        
-        {/* Telemetry Debug Info */}
+
+        {feedback && (
+          <div className="rounded-lg border p-3 text-sm bg-muted/30">{feedback}</div>
+        )}
+
         <details className="text-xs">
           <summary className="cursor-pointer text-muted-foreground">
-            Debug: {events.length} events captured
+            Debug: {eventCount} events captured · undo depth {undoStack.current.length}
           </summary>
           <pre className="mt-2 p-2 bg-muted rounded overflow-auto max-h-40">
-            {JSON.stringify(events.slice(-5), null, 2)}
+            {JSON.stringify(events.current.slice(-6), null, 2)}
           </pre>
         </details>
       </CardContent>

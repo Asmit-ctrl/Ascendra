@@ -1305,6 +1305,115 @@ Return JSON array of {lessons_count} lesson objects:
                 unpacked_id=unpacked_id,
             )
 
+    async def generate_differentiation(
+        self,
+        *,
+        teacher_id: str,
+        lesson_plan: Dict[str, Any],
+        language: str = "english",
+        lesson_plan_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Generate three-tier differentiation for one lesson plan.
+
+        Composes Tier 1's lesson-plan artefact — caller passes the lesson
+        plan JSON (typically straight from :meth:`generate_lesson_plan`'s
+        ``lesson_plan`` dict). Returns
+        ``{differentiation_id, differentiation: Differentiation-dict}``.
+        Persists best-effort to the ``differentiations`` table when
+        Supabase is configured; failures are logged, not raised.
+
+        ``lesson_plan_id`` is recorded alongside the differentiation row
+        when supplied so the studio can join back to the source plan; pass
+        ``None`` when the caller is generating against an in-memory plan
+        that wasn't persisted.
+        """
+        from .scheme.differentiation import (
+            DifferentiationValidationError,
+            generate_differentiation as _gen_diff,
+        )
+
+        try:
+            self.logger.info(
+                "Generating differentiation",
+                grade=lesson_plan.get("grade"),
+                subject=lesson_plan.get("subject"),
+                strand=lesson_plan.get("strand"),
+                sub_strand=lesson_plan.get("subStrand")
+                or lesson_plan.get("sub_strand"),
+            )
+
+            try:
+                diff = await _gen_diff(
+                    self._provider(),
+                    lesson_plan=lesson_plan,
+                    language=language,
+                )
+            except DifferentiationValidationError as exc:
+                raise AgentError(f"Differentiation generation failed: {exc}") from exc
+
+            diff_dict = diff.model_dump()
+            differentiation_id = f"diff_{uuid.uuid4().hex[:12]}"
+
+            if self.supabase:
+                await self._save_differentiation(
+                    differentiation_id=differentiation_id,
+                    teacher_id=teacher_id,
+                    lesson_plan_id=lesson_plan_id,
+                    payload=diff_dict,
+                )
+
+            return {
+                "agent": "lesson_architect",
+                "action": "generate_differentiation",
+                "differentiation_id": differentiation_id,
+                "differentiation": diff_dict,
+            }
+
+        except AgentError:
+            raise
+        except Exception as exc:
+            self.logger.error("Differentiation generation failed", error=str(exc))
+            raise AgentError(f"Differentiation generation failed: {exc}") from exc
+
+    async def _save_differentiation(
+        self,
+        *,
+        differentiation_id: str,
+        teacher_id: str,
+        lesson_plan_id: Optional[str],
+        payload: Dict[str, Any],
+    ) -> None:
+        """Persist a differentiation block. Best-effort — failures log, don't raise.
+
+        Table not yet provisioned — landing alongside the studio UI in the
+        follow-up phase. Insert will fail and log until the migration
+        lands, which is the intended dev-phase behaviour (matches the
+        pattern set by ``_save_unpacked_outcome`` and ``_save_worksheet``).
+        """
+        if not self.supabase:
+            return
+        row = {
+            "differentiation_id": differentiation_id,
+            "teacher_id": teacher_id,
+            "lesson_plan_id": lesson_plan_id,
+            "grade": payload.get("grade"),
+            "subject": payload.get("subject"),
+            "strand": payload.get("strand"),
+            "sub_strand": payload.get("subStrand"),
+            "payload": payload,
+            "created_at": datetime.now().isoformat(),
+        }
+        try:
+            self.supabase.table("differentiations").insert(row).execute()
+            self.logger.info("Differentiation saved", differentiation_id=differentiation_id)
+        except Exception as exc:
+            self.logger.error(
+                "Failed to save differentiation",
+                error=str(exc),
+                error_type=type(exc).__name__,
+                differentiation_id=differentiation_id,
+            )
+
     async def _generate_lesson_plan_content(
         self,
         *,

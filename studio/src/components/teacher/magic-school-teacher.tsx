@@ -16,6 +16,7 @@ import { SchemeOfWorkGenerator } from './scheme-of-work-generator'
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/api-config'
 import { WorksheetRenderer } from './worksheet-renderer'
 import { TextLevelerRenderer } from './text-leveler-renderer'
+import { DifferentiationRenderer } from './differentiation-renderer'
 import '@/styles/print.css'
 
 export function MagicSchoolTeacher() {
@@ -37,6 +38,7 @@ export function MagicSchoolTeacher() {
   const [inputText, setInputText] = useState('')
   const [worksheetResult, setWorksheetResult] = useState<any>(null)
   const [levelerResult, setLevelerResult] = useState<any>(null)
+  const [differentiationResult, setDifferentiationResult] = useState<any>(null)
 
   const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9']
   const subjects = ['Mathematics', 'English', 'Kiswahili', 'Science', 'Social Studies', 'CRE', 'IRE', 'HRE', 'Creative Arts', 'Agriculture']
@@ -55,6 +57,7 @@ export function MagicSchoolTeacher() {
     setGeneratedContent('')
     setWorksheetResult(null)
     setLevelerResult(null)
+    setDifferentiationResult(null)
 
     try {
       const teacherId = 'teacher_001'
@@ -142,6 +145,82 @@ export function MagicSchoolTeacher() {
         return
       }
 
+      if (type === 'differentiation') {
+        // Tier 2 tool composes a lesson-plan artefact. Magic-school-teacher
+        // doesn't have a full lesson plan in scope, so synthesise a minimal
+        // one from the form fields — the backend's
+        // `_required_lesson_plan_keys` guard only requires grade, subject,
+        // strand, subStrand, and objectives. The rest is consumed
+        // opportunistically when present.
+        const objectives = learningObjectives
+          .split('\n')
+          .map((o) => o.trim())
+          .filter(Boolean)
+        const lessonPlan = {
+          title: `${topic} (${grade} ${subject})`,
+          grade,
+          subject,
+          strand: topic,
+          subStrand: topic,
+          duration: `${duration} minutes`,
+          objectives:
+            objectives.length > 0
+              ? objectives
+              : [
+                  `Explore ${topic}`,
+                  `Apply key ideas from ${topic} in a classroom task`,
+                ],
+          keyInquiryQuestion: `How can learners demonstrate their understanding of ${topic}?`,
+          // The backend reads these only if present — passing minimal but
+          // realistic activities so the prompt has something to "adapt".
+          introduction: {
+            duration: '5 minutes',
+            activities: [`Hook activity introducing ${topic}`],
+          },
+          development: {
+            duration: '25 minutes',
+            activities: [
+              `Guided practice on ${topic}`,
+              `Pair work applying ${topic}`,
+            ],
+          },
+          conclusion: {
+            duration: '5 minutes',
+            activities: [`Recap and exit ticket on ${topic}`],
+          },
+          assessment: [`Observation during practice on ${topic}`],
+          resources: ['Classroom board', 'Student notebooks'],
+        }
+
+        const response = await fetch(
+          buildApiUrl(API_ENDPOINTS.LESSON_ARCHITECT_GENERATE_DIFFERENTIATION),
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              teacher_id: teacherId,
+              lesson_plan: lessonPlan,
+              language: 'english',
+            }),
+          }
+        )
+
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}))
+          throw new Error(
+            err.detail || err.error || 'Failed to generate differentiation'
+          )
+        }
+
+        const data = await response.json()
+        setDifferentiationResult(data.differentiation)
+        toast({
+          title: 'Differentiation Ready!',
+          description: 'Three-tier strategies generated for this topic',
+        })
+        return
+      }
+
       let prompt = ''
       
       switch (type) {
@@ -196,16 +275,10 @@ Criteria to assess:
 Format as a clear table with descriptors for each level.`
           break
 
-        case 'differentiation':
-          prompt = `Provide differentiation strategies for teaching ${grade} ${subject} topic "${topic}".
-Include:
-1. For Advanced Learners (3 strategies)
-2. For Struggling Learners (3 strategies)
-3. For English Language Learners (3 strategies)
-4. For Different Learning Styles (Visual, Auditory, Kinesthetic)
-5. Specific CBC-aligned activities for each group
-6. Assessment modifications`
-          break
+        // case 'differentiation' is handled above via the structured
+        // /lesson-architect/generate-differentiation endpoint and the
+        // DifferentiationRenderer — the old markdown-blob path was
+        // removed when the Tier 2 backend landed.
 
         case 'parent-letter':
           prompt = `Write a professional parent communication letter about ${grade} ${subject} topic "${topic}".
@@ -819,9 +892,132 @@ Tone: Professional, warm, encouraging. Kenyan context.`
 
         <TabsContent value="differentiation">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="lg:col-span-3">
-            <CardContent className="py-12">
-              <p className="text-center text-muted-foreground">Use the form above to generate differentiation strategies</p>
+          {/* Input form — mirrors the worksheet/text-leveler tab layout so
+              the differentiation surface reads as the same product. The
+              backend builds a minimal synthetic lesson plan from these
+              fields; for the full per-lesson tiering, use the
+              "Differentiate" button inside the scheme-wizard lesson-plan
+              dialog instead. */}
+          <Card className="lg:col-span-1">
+            <CardHeader>
+              <CardTitle>Input Details</CardTitle>
+              <CardDescription>Generate three-tier strategies</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Grade Level</Label>
+                <Select value={grade} onValueChange={setGrade}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {grades.map(g => (
+                      <SelectItem key={g} value={g}>{g}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Subject</Label>
+                <Select value={subject} onValueChange={setSubject}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {subjects.map(s => (
+                      <SelectItem key={s} value={s}>{s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Topic *</Label>
+                <Input
+                  placeholder="e.g., Fractions, Photosynthesis"
+                  value={topic}
+                  onChange={(e) => setTopic(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Lesson Duration (minutes)</Label>
+                <Input
+                  type="number"
+                  value={duration}
+                  onChange={(e) => setDuration(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Learning Objectives (one per line)</Label>
+                <Textarea
+                  placeholder={`count whole numbers up to 100\nwrite numerals 1-100`}
+                  value={learningObjectives}
+                  onChange={(e) => setLearningObjectives(e.target.value)}
+                  rows={4}
+                />
+                <p className="text-xs text-muted-foreground">
+                  All three tiers will target these same objectives — only the route differs.
+                </p>
+              </div>
+
+              <Button
+                onClick={() => generateContent('differentiation')}
+                disabled={loading || !topic.trim()}
+                className="w-full"
+                size="lg"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Generating tiers...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Generate Differentiation
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Output — structured three-column renderer */}
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>Three-Tier Strategies</CardTitle>
+              <CardDescription>
+                {differentiationResult
+                  ? 'Review the support / on-grade / extension tiers below.'
+                  : 'Generated strategies will appear here.'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {differentiationResult ? (
+                <ScrollArea className="h-[600px] pr-2">
+                  <DifferentiationRenderer differentiation={differentiationResult} />
+                </ScrollArea>
+              ) : loading ? (
+                <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                  <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                  <p className="text-muted-foreground">Generating three-tier strategies...</p>
+                  <p className="text-sm text-muted-foreground">This may take 10-30 seconds</p>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 space-y-4 text-center">
+                  <Users className="h-16 w-16 text-muted-foreground" />
+                  <div>
+                    <h3 className="font-semibold mb-2">Ready to Differentiate</h3>
+                    <p className="text-sm text-muted-foreground max-w-md">
+                      Fill in topic + objectives on the left and click generate.
+                      For per-lesson tiers, use the "Differentiate" button inside
+                      the lesson-plan dialog of any scheme of work.
+                    </p>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
