@@ -119,7 +119,7 @@ def extract_json_array(raw: str) -> List[Dict[str, Any]]:
             if isinstance(parsed, list):
                 return parsed
         except json.JSONDecodeError as exc:
-            log.warning(f"JSON parse failed on complete array: {exc}")
+            log.warning("JSON parse failed on complete array: %s", exc)
             pass  # fall through to recovery
 
     # Truncated — recover up to the last complete object.
@@ -141,7 +141,7 @@ def extract_json_array(raw: str) -> List[Dict[str, Any]]:
         sanitized = _sanitize_escape_sequences(repaired)
         items = json.loads(sanitized)
     except json.JSONDecodeError as exc:
-        raise ValueError(f"Cannot recover truncated JSON: {exc}") from exc
+        raise ValueError("Cannot recover truncated JSON: {}".format(exc)) from exc
 
     if not isinstance(items, list):
         raise ValueError("Recovered JSON was not an array")
