@@ -40,11 +40,11 @@ class _GroqProvider:
         
         # Try multiple models in order of preference
         # llama-3.3-70b-versatile is best and current
-        # mixtral-8x7b-32768 is fallback
+        # llama-3.1-8b-instant is fallback (faster, smaller)
         self.models = [
             os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
             "llama-3.3-70b-versatile",
-            "mixtral-8x7b-32768",
+            "llama-3.1-8b-instant",
         ]
         self.current_model_index = 0
         

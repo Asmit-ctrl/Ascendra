@@ -238,9 +238,9 @@ def get_recommended_model(task: str = "general") -> str:
     recommendations = {
         "general": "llama-3.3-70b-versatile",
         "tutoring": "llama-3.3-70b-versatile",  # Best quality for education
-        "assessment": "mixtral-8x7b-32768",     # Fast for quiz generation
-        "translation": "mixtral-8x7b-32768",    # Good multilingual
-        "fast": "mixtral-8x7b-32768",           # Fastest responses
+        "assessment": "llama-3.1-8b-instant",   # Fast for quiz generation
+        "translation": "llama-3.3-70b-versatile", # Good multilingual
+        "fast": "llama-3.1-8b-instant",         # Fastest responses
     }
     
     return recommendations.get(task, "llama-3.3-70b-versatile")
