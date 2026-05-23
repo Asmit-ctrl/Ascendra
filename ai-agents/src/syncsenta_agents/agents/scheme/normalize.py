@@ -141,7 +141,24 @@ def extract_json_array(raw: str) -> List[Dict[str, Any]]:
         sanitized = _sanitize_escape_sequences(repaired)
         items = json.loads(sanitized)
     except json.JSONDecodeError as exc:
-        raise ValueError("Cannot recover truncated JSON: {}".format(exc)) from exc
+        # Log the problematic JSON for debugging
+        log.error("JSON recovery failed. First 500 chars of repaired JSON: %s", repaired[:500])
+        log.error("JSON decode error: %s", exc)
+        # Try one more aggressive fix: remove incomplete last object
+        try:
+            # Find second-to-last closing brace
+            second_last = repaired[:last_brace].rfind("}")
+            if second_last > 0:
+                repaired2 = repaired[:second_last + 1] + "]"
+                repaired2 = re.sub(r",\s*}", "}", repaired2)
+                repaired2 = re.sub(r",\s*]", "]", repaired2)
+                sanitized2 = _sanitize_escape_sequences(repaired2)
+                items = json.loads(sanitized2)
+                log.warning("Recovered using second-to-last object")
+            else:
+                raise ValueError("Cannot recover truncated JSON: {}".format(exc)) from exc
+        except (json.JSONDecodeError, ValueError):
+            raise ValueError("Cannot recover truncated JSON: {}".format(exc)) from exc
 
     if not isinstance(items, list):
         raise ValueError("Recovered JSON was not an array")
