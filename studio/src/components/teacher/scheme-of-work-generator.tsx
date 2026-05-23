@@ -119,8 +119,8 @@ export function SchemeOfWorkGenerator() {
       setCurrentSchemeId(data.scheme_id || null)
 
       toast({
-        title: 'Scheme of Work Generated!',
-        description: `${rows.length}-lesson CBC scheme ready for review`,
+        title: 'Scheme of Work Generated & Saved!',
+        description: `${rows.length}-lesson CBC scheme saved. Go to "Lesson Plans from Scheme" tab to create lesson plans.`,
       })
     } catch (error) {
       console.error('Generation error:', error)
