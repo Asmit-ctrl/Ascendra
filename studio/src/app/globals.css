@@ -178,3 +178,171 @@
     scrollbar-color: hsl(var(--primary)) hsl(var(--muted));
   }
 }
+
+/* ============================================
+   MOBILE IMPROVEMENTS (FREE)
+   ============================================ */
+
+/* Increase tap targets for mobile (44x44px minimum) */
+@media (max-width: 768px) {
+  button,
+  a,
+  [role="button"],
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Larger text for better readability */
+  body {
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+  
+  /* Prevent zoom on input focus (iOS) */
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+  
+  /* Better spacing for touch */
+  .mobile-spacing {
+    padding: 1rem;
+    gap: 1rem;
+  }
+}
+
+/* iOS safe area support */
+body {
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Better focus indicators for keyboard navigation */
+*:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+/* Hide focus outline for mouse users */
+*:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Touch-friendly hover states */
+@media (hover: hover) and (pointer: fine) {
+  /* Only apply hover effects on devices with precise pointers */
+  .hover-scale:hover {
+    transform: scale(1.02);
+  }
+}
+
+/* Prevent text selection on buttons */
+button,
+[role="button"] {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Better mobile menu */
+@media (max-width: 768px) {
+  .mobile-menu {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: hsl(var(--background));
+    border-top: 1px solid hsl(var(--border));
+    padding: 0.5rem;
+    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+    z-index: 50;
+  }
+}
+
+/* Optimize for low-end devices */
+@media (prefers-reduced-data: reduce) {
+  /* Disable animations */
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+  
+  /* Disable background images */
+  * {
+    background-image: none !important;
+  }
+}
+
+/* Dark mode improvements for mobile */
+@media (max-width: 768px) {
+  .dark {
+    /* Slightly lighter background for better readability on small screens */
+    --background: 0 0% 10%;
+  }
+}
+
+/* Landscape mode optimizations */
+@media (max-width: 768px) and (orientation: landscape) {
+  /* Reduce header height in landscape */
+  .mobile-header {
+    height: 3rem;
+  }
+  
+  /* Optimize spacing */
+  .mobile-spacing {
+    padding: 0.5rem;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  * {
+    border-width: 2px;
+  }
+  
+  button,
+  a {
+    text-decoration: underline;
+  }
+}
+
+/* Print styles */
+@media print {
+  /* Hide non-essential elements */
+  nav,
+  aside,
+  .no-print {
+    display: none !important;
+  }
+  
+  /* Optimize for printing */
+  body {
+    background: white;
+    color: black;
+  }
+  
+  /* Prevent page breaks inside elements */
+  h1, h2, h3, h4, h5, h6,
+  p, li {
+    page-break-inside: avoid;
+  }
+}
