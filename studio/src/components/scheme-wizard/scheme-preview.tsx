@@ -19,7 +19,6 @@ interface SchemePreviewProps {
   term: string;
   readOnly?: boolean;
   onGenerateLessonPlan?: (row: SchemeRow, index: number) => void;
-  onUnpackOutcome?: (row: SchemeRow) => void;
 }
 
 /**
@@ -47,7 +46,6 @@ export default function SchemePreview({
   term,
   readOnly = false,
   onGenerateLessonPlan,
-  onUnpackOutcome,
 }: SchemePreviewProps) {
   const useKiswahili = isKiswahiliSubject(subject);
   const lang = useKiswahili ? 'sw' : 'en';
@@ -88,7 +86,7 @@ export default function SchemePreview({
 
       {/* Table */}
       <div className="w-full rounded-lg border border-border">
-        <div className="overflow-x-auto overflow-y-hidden pb-2 scheme-table-scroll">
+        <div className="overflow-x-auto overflow-y-hidden pb-2 scheme-table-scroll mobile-scroll-visible">
           <table className="min-w-[1400px] w-full text-sm">
             <thead>
               <tr>
@@ -121,19 +119,7 @@ export default function SchemePreview({
                     {row.subStrand}
                   </td>
                   <td className="px-3 py-2 text-xs align-top border-b border-border whitespace-pre-line min-w-[220px]">
-                    <div className="space-y-2">
-                      <div>{row.specificLearningOutcome}</div>
-                      {onUnpackOutcome && row.specificLearningOutcome && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="mt-2"
-                          onClick={() => onUnpackOutcome(row)}
-                        >
-                          Unpack outcome
-                        </Button>
-                      )}
-                    </div>
+                    {row.specificLearningOutcome}
                   </td>
                   <td className="px-3 py-2 text-xs align-top border-b border-border whitespace-pre-line min-w-[220px]">
                     {row.learningExperiences}

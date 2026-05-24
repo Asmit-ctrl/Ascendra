@@ -156,3 +156,25 @@
   scrollbar-width: thin;
   scrollbar-color: hsl(var(--border)) hsl(var(--muted));
 }
+
+/* Mobile-specific: Always show scrollbar */
+@media (max-width: 768px) {
+  .mobile-scroll-visible::-webkit-scrollbar {
+    height: 12px; /* Larger on mobile for easier visibility */
+  }
+  
+  .mobile-scroll-visible::-webkit-scrollbar-track {
+    background: hsl(var(--muted));
+    border-radius: 6px;
+  }
+  
+  .mobile-scroll-visible::-webkit-scrollbar-thumb {
+    background: hsl(var(--primary)); /* Use primary color for better visibility */
+    border-radius: 6px;
+  }
+  
+  .mobile-scroll-visible {
+    scrollbar-width: auto; /* Force visible scrollbar on Firefox mobile */
+    scrollbar-color: hsl(var(--primary)) hsl(var(--muted));
+  }
+}

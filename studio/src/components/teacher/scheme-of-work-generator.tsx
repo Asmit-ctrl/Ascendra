@@ -367,7 +367,6 @@ export function SchemeOfWorkGenerator() {
                 grade={grade}
                 term={term}
                 onGenerateLessonPlan={(row) => setLessonPlanRow(row)}
-                onUnpackOutcome={handleUnpackOutcome}
               />
             </ScrollArea>
           ) : (
