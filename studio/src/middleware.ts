@@ -1,17 +1,49 @@
 /**
  * Next.js Middleware for Security Headers
- * 
+ *
  * SECURITY: Content-Security-Policy (CSP)
  * - Prevents XSS attacks by controlling resource loading
  * - Restricts inline scripts and styles
  * - Allows only trusted sources
+ *
+ * SECURITY: API Versioning (Phase 4 - P3)
+ * - Adds API version headers
+ * - Supports version negotiation
+ * - Maintains backward compatibility
  */
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+const API_VERSION = '1.0.0';
+const SUPPORTED_VERSIONS = ['1.0.0'];
+
 export function middleware(request: NextRequest) {
   const response = NextResponse.next();
+
+  // SECURITY: API Versioning
+  response.headers.set('X-API-Version', API_VERSION);
+  response.headers.set('X-Supported-Versions', SUPPORTED_VERSIONS.join(', '));
+  
+  // Check if client requested specific API version
+  const requestedVersion = request.headers.get('X-API-Version');
+  if (requestedVersion && !SUPPORTED_VERSIONS.includes(requestedVersion)) {
+    return NextResponse.json(
+      {
+        error: 'Unsupported API version',
+        requestedVersion,
+        supportedVersions: SUPPORTED_VERSIONS,
+        currentVersion: API_VERSION,
+      },
+      {
+        status: 400,
+        headers: {
+          'X-API-Version': API_VERSION,
+          'X-Supported-Versions': SUPPORTED_VERSIONS.join(', '),
+        },
+      }
+    );
+  }
 
   // Content Security Policy
   // This is a strict CSP that prevents most XSS attacks
