@@ -1,4 +1,9 @@
-"""Teacher Dashboard API endpoints."""
+"""Teacher Dashboard API endpoints.
+
+GET endpoints read from the Phase 1 telemetry tables via `dashboard_queries`.
+The WebSocket handlers and POST /interventions remain unchanged. New Phase 2
+endpoints surface trends per learner and per competency.
+"""
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
@@ -8,6 +13,7 @@ import asyncio
 
 from .websocket import manager, handle_teacher_intervention
 from ..core.logging import AgentLogger
+from . import dashboard_queries as dq
 
 router = APIRouter(prefix="/dashboard", tags=["teacher-dashboard"])
 logger = AgentLogger("dashboard_api")
@@ -23,6 +29,9 @@ class StudentActivitySummary(BaseModel):
     current_agent: Optional[str] = None
     duration_minutes: int
     last_activity: datetime
+    mastery_indicator: Optional[float] = None
+    engagement_score: Optional[float] = None
+    primary_pattern: Optional[str] = None
 
 
 class AgentUsageStats(BaseModel):
@@ -39,8 +48,12 @@ class StudentProgressDetail(BaseModel):
     topic: str
     mastery_level: float
     time_spent_minutes: int
-    quiz_scores: List[float]
+    quiz_scores: List[float] = []
     last_activity: datetime
+    competency: Optional[str] = None
+    session_id: Optional[str] = None
+    engagement_score: Optional[float] = None
+    primary_pattern: Optional[str] = None
 
 
 class TeacherIntervention(BaseModel):
@@ -97,32 +110,10 @@ async def student_websocket(websocket: WebSocket, student_id: str):
 
 
 @router.get("/students/active", response_model=List[StudentActivitySummary])
-async def get_active_students():
-    """Get list of currently active students."""
-    # TODO: Query database for active sessions
-    # For now, return mock data
-    return [
-        StudentActivitySummary(
-            student_id="student_1",
-            student_name="John Kamau",
-            status="active",
-            current_subject="Mathematics",
-            current_topic="Fractions",
-            current_agent="tutor",
-            duration_minutes=15,
-            last_activity=datetime.utcnow()
-        ),
-        StudentActivitySummary(
-            student_id="student_2",
-            student_name="Mary Wanjiku",
-            status="struggling",
-            current_subject="Science",
-            current_topic="Plants",
-            current_agent="assessment",
-            duration_minutes=22,
-            last_activity=datetime.utcnow() - timedelta(minutes=2)
-        )
-    ]
+async def get_active_students(limit: int = 50):
+    """List students with a session that ended in the last 30 minutes."""
+    rows = dq.get_active_students(limit=limit)
+    return [StudentActivitySummary(**r) for r in rows]
 
 
 @router.get("/agents/stats", response_model=List[AgentUsageStats])
@@ -148,20 +139,42 @@ async def get_agent_stats(hours: int = 1):
 
 
 @router.get("/students/{student_id}/progress", response_model=List[StudentProgressDetail])
-async def get_student_progress(student_id: str):
-    """Get detailed progress for a specific student."""
-    # TODO: Query database for student progress
-    return [
-        StudentProgressDetail(
-            student_id=student_id,
-            subject="Mathematics",
-            topic="Fractions",
-            mastery_level=0.75,
-            time_spent_minutes=45,
-            quiz_scores=[0.8, 0.85, 0.9],
-            last_activity=datetime.utcnow()
-        )
-    ]
+async def get_student_progress(student_id: str, limit: int = 25):
+    """Recent sessions for one student, with mastery + engagement per session."""
+    rows = dq.get_student_progress(student_id, limit=limit)
+    return [StudentProgressDetail(**r) for r in rows]
+
+
+@router.get("/students/{student_id}/misconceptions")
+async def get_student_misconceptions(student_id: str, limit: int = 50, grouped: bool = False):
+    """All misconceptions for a student (newest first), or grouped by type."""
+    if grouped:
+        return {"student_id": student_id, "by_type": dq.get_misconception_summary(student_id)}
+    return {"student_id": student_id, "rows": dq.get_student_misconceptions(student_id, limit=limit)}
+
+
+@router.get("/students/{student_id}/interventions")
+async def get_student_interventions(student_id: str, limit: int = 25):
+    """Recent interventions generated for one student."""
+    return {"student_id": student_id, "rows": dq.get_student_interventions(student_id, limit=limit)}
+
+
+@router.get("/students/{student_id}/timeline")
+async def get_student_timeline(student_id: str, limit: int = 30):
+    """Session-by-session timeline with misconception + intervention counts."""
+    return {"student_id": student_id, "sessions": dq.get_student_timeline(student_id, limit=limit)}
+
+
+@router.get("/competencies/summary")
+async def get_competency_summary(limit: int = 50):
+    """Every competency seen with cohort-level session/misconception counts."""
+    return {"competencies": dq.get_competency_summary(limit=limit)}
+
+
+@router.get("/competencies/{competency}/trends")
+async def get_competency_trends(competency: str):
+    """Cohort-level trends for one competency."""
+    return dq.get_competency_trends(competency)
 
 
 @router.post("/interventions")
@@ -186,21 +199,9 @@ async def create_intervention(intervention: TeacherIntervention):
 
 
 @router.get("/alerts")
-async def get_alerts(acknowledged: bool = False):
-    """Get dashboard alerts."""
-    # TODO: Query database for alerts
-    return [
-        {
-            "id": 1,
-            "alert_type": "idle",
-            "severity": "medium",
-            "student_id": "student_3",
-            "student_name": "Jane Akinyi",
-            "message": "Student has been idle for 15 minutes",
-            "created_at": datetime.utcnow() - timedelta(minutes=5),
-            "acknowledged": False
-        }
-    ]
+async def get_alerts(acknowledged: bool = False, limit: int = 50):
+    """Live alerts derived from recent behavioral profiles flagged for intervention."""
+    return dq.get_alerts(acknowledged=acknowledged, limit=limit)
 
 
 @router.post("/alerts/{alert_id}/acknowledge")
