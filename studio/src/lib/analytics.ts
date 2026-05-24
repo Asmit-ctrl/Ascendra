@@ -175,9 +175,15 @@ function getStoredEvents(): Event[] {
 
 /**
  * Get analytics summary
+ * SECURITY: Can optionally filter by current user for authorization
  */
-export function getAnalytics(): AnalyticsSummary {
-  const events = getStoredEvents();
+export function getAnalytics(currentUserId?: string): AnalyticsSummary {
+  let events = getStoredEvents();
+  
+  // SECURITY: If userId provided, only return events for that user
+  if (currentUserId) {
+    events = events.filter(e => !e.userId || e.userId === currentUserId);
+  }
   
   // Group by event name
   const eventCounts = events.reduce((acc: Record<string, number>, event: Event) => {
@@ -222,12 +228,18 @@ export function getEventsByName(name: string): Event[] {
 
 /**
  * Get events by user
- * SECURITY: Validates userId format before querying
+ * SECURITY: Validates userId format and authorization before querying
  */
-export function getEventsByUser(userId: string): Event[] {
+export function getEventsByUser(userId: string, currentUserId?: string): Event[] {
   // SECURITY: Validate userId format
   if (!isValidUUID(userId)) {
     console.warn('Invalid userId provided to getEventsByUser');
+    return [];
+  }
+  
+  // SECURITY: Authorization check - users can only access their own events
+  if (currentUserId && userId !== currentUserId) {
+    console.warn('Authorization failed: User attempting to access another user\'s events');
     return [];
   }
   
@@ -238,9 +250,13 @@ export function getEventsByUser(userId: string): Event[] {
 
 /**
  * Get events in date range
- * SECURITY: Validates date inputs
+ * SECURITY: Validates date inputs and authorization
  */
-export function getEventsByDateRange(startDate: Date, endDate: Date): Event[] {
+export function getEventsByDateRange(
+  startDate: Date,
+  endDate: Date,
+  currentUserId?: string
+): Event[] {
   // SECURITY: Validate date inputs
   if (!(startDate instanceof Date) || !(endDate instanceof Date)) {
     console.warn('Invalid date parameters provided');
@@ -257,7 +273,13 @@ export function getEventsByDateRange(startDate: Date, endDate: Date): Event[] {
     return [];
   }
   
-  const events = getStoredEvents();
+  let events = getStoredEvents();
+  
+  // SECURITY: Filter by current user if provided
+  if (currentUserId) {
+    events = events.filter(e => !e.userId || e.userId === currentUserId);
+  }
+  
   return events.filter(e => {
     try {
       const eventDate = new Date(e.timestamp);
@@ -338,16 +360,17 @@ export const Analytics = {
 
 /**
  * React hook for analytics
+ * SECURITY: Optionally filters by current user
  */
-export function useAnalytics() {
+export function useAnalytics(currentUserId?: string) {
   const [summary, setSummary] = React.useState<AnalyticsSummary | null>(null);
 
   React.useEffect(() => {
-    setSummary(getAnalytics());
-  }, []);
+    setSummary(getAnalytics(currentUserId));
+  }, [currentUserId]);
 
   const refresh = () => {
-    setSummary(getAnalytics());
+    setSummary(getAnalytics(currentUserId));
   };
 
   return {
@@ -355,6 +378,8 @@ export function useAnalytics() {
     refresh,
     track: trackEvent,
     Analytics,
+    getEventsByUser: (userId: string) => getEventsByUser(userId, currentUserId),
+    getEventsByDateRange: (start: Date, end: Date) => getEventsByDateRange(start, end, currentUserId),
   };
 }
 
