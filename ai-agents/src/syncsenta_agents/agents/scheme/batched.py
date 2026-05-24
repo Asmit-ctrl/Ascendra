@@ -578,6 +578,7 @@ async def generate_for_sub_strand(
         batch_size = min(remaining, MAX_LESSONS_PER_BATCH)
         rows: Optional[List[Dict[str, Any]]] = None
         attempts = 0
+        current_batch_size = batch_size
 
         while rows is None and attempts < max_attempts:
             attempts += 1
@@ -588,7 +589,7 @@ async def generate_for_sub_strand(
                     subject=subject,
                     strand=strand,
                     sub_strand=sub_strand,
-                    batch_lessons=batch_size,
+                    batch_lessons=current_batch_size,
                     context=context,
                     is_sw=is_sw,
                     week_start=week_start,
@@ -600,6 +601,35 @@ async def generate_for_sub_strand(
                 )
             except (RateLimitError, NoOfficialDataError):
                 raise  # Never retry these; surface immediately.
+            except ValueError as exc:
+                # JSON recovery failed - try with smaller batch size
+                error_msg = str(exc)
+                if "Cannot recover truncated JSON" in error_msg or "No valid objects found" in error_msg:
+                    if current_batch_size > 1 and attempts < max_attempts:
+                        # Reduce batch size and retry
+                        current_batch_size = max(1, current_batch_size // 2)
+                        log.warning(
+                            "JSON recovery failed for batch %d, reducing batch size to %d and retrying (attempt %d/%d)",
+                            batch_index,
+                            current_batch_size,
+                            attempts,
+                            max_attempts
+                        )
+                        await asyncio.sleep(retry_backoff_seconds)
+                        continue
+                    elif attempts >= max_attempts:
+                        log.error(
+                            "Failed to generate batch %d after %d attempts with batch sizes down to %d",
+                            batch_index,
+                            attempts,
+                            current_batch_size
+                        )
+                        raise
+                else:
+                    # Other ValueError, retry normally
+                    if attempts >= max_attempts:
+                        raise
+                    await asyncio.sleep(retry_backoff_seconds)
             except Exception:
                 if attempts >= max_attempts:
                     raise
