@@ -11,17 +11,18 @@
  * In production, this MUST be set via NEXT_PUBLIC_AI_AGENTS_URL environment variable.
  * In development, falls back to localhost.
  * 
- * @throws Error if URL is not configured in production
+ * Returns null if not configured (instead of throwing) to prevent build/render failures.
  */
-export function getApiUrl(): string {
+export function getApiUrl(): string | null {
   const url = process.env.NEXT_PUBLIC_AI_AGENTS_URL;
   
-  // In production, require the environment variable
+  // In production, return null if not configured (don't throw during module load)
   if (process.env.NODE_ENV === 'production' && !url) {
-    throw new Error(
+    console.error(
       'NEXT_PUBLIC_AI_AGENTS_URL environment variable is not set. ' +
-      'Please configure the backend URL in your deployment settings.'
+      'Backend API calls will fail. Please configure in deployment settings.'
     );
+    return null;
   }
   
   // In development, allow localhost fallback
@@ -31,9 +32,11 @@ export function getApiUrl(): string {
 /**
  * Get WebSocket URL for real-time features
  * Converts HTTP(S) URL to WS(S) URL
+ * Returns null if backend is not configured
  */
-export function getWebSocketUrl(): string {
+export function getWebSocketUrl(): string | null {
   const httpUrl = getApiUrl();
+  if (!httpUrl) return null;
   return httpUrl.replace(/^http/, 'ws');
 }
 
@@ -73,16 +76,32 @@ export const API_ENDPOINTS = {
 
 /**
  * Build full API URL
+ * Throws error if backend is not configured (at call time, not module load time)
  */
 export function buildApiUrl(endpoint: string): string {
   const baseUrl = getApiUrl();
+  
+  if (!baseUrl) {
+    throw new Error(
+      'Backend API is not configured. Set NEXT_PUBLIC_AI_AGENTS_URL environment variable.'
+    );
+  }
+  
   return `${baseUrl}${endpoint}`;
 }
 
 /**
  * Build WebSocket URL
+ * Throws error if backend is not configured (at call time, not module load time)
  */
 export function buildWebSocketUrl(endpoint: string): string {
   const baseUrl = getWebSocketUrl();
+  
+  if (!baseUrl) {
+    throw new Error(
+      'Backend API is not configured. Set NEXT_PUBLIC_AI_AGENTS_URL environment variable.'
+    );
+  }
+  
   return `${baseUrl}${endpoint}`;
 }
