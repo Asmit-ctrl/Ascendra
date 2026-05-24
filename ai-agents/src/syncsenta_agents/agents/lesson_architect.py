@@ -52,6 +52,7 @@ class _GroqProvider:
             model=self.models[self.current_model_index],
             api_key=os.getenv("GROQ_API_KEY"),
             temperature=0.3,  # Lower temp for more consistent curriculum content
+            max_tokens=4096,  # Increased from default to prevent truncation of scheme rows
         )
 
     async def generate(self, prompt: str, *, system: str | None = None, max_retries: int = 3) -> str:
@@ -84,6 +85,7 @@ class _GroqProvider:
                             model=self.models[self.current_model_index],
                             api_key=os.getenv("GROQ_API_KEY"),
                             temperature=0.3,
+                            max_tokens=4096,
                         )
                         # Note: logger not available in this scope, using print for now
                         print(f"Rate limit hit, switching to model: {self.models[self.current_model_index]}")
@@ -104,6 +106,7 @@ class _GroqProvider:
                                 model=self.models[self.current_model_index],
                                 api_key=os.getenv("GROQ_API_KEY"),
                                 temperature=0.3,
+                                max_tokens=4096,
                             )
                             continue
                         else:
