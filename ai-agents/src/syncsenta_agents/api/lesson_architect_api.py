@@ -118,6 +118,23 @@ class GenerateExamRequest(BaseModel):
     counts: Optional[Dict[str, int]] = None
 
 
+class GenerateDifferentiationRequest(BaseModel):
+    """Request to generate three-tier differentiation for one lesson plan.
+
+    Tier 2 tool — composes the Tier 1 lesson-plan artefact. ``lesson_plan``
+    is the JSON dict returned by ``/generate-lesson-plan`` (or a manually
+    composed equivalent that carries ``grade, subject, strand, subStrand,
+    objectives`` at minimum). ``lesson_plan_id`` is optional and is
+    recorded alongside the saved differentiation so the studio can join
+    back to the source plan.
+    """
+
+    teacher_id: str
+    lesson_plan: Dict[str, Any]
+    language: str = "english"
+    lesson_plan_id: Optional[str] = None
+
+
 class GenerateLessonPlanRequest(BaseModel):
     """Request to generate one CBC lesson plan from a SchemeRow.
 
@@ -366,6 +383,50 @@ async def unpack_outcome(request: UnpackOutcomeRequest) -> Dict[str, Any]:
         )
         raise HTTPException(
             status_code=500, detail=f"Failed to unpack outcome: {exc}"
+        )
+
+
+@router.post("/generate-differentiation")
+async def generate_differentiation(
+    request: GenerateDifferentiationRequest,
+) -> Dict[str, Any]:
+    """Generate three-tier differentiation for a lesson plan.
+
+    Output ``differentiation`` matches
+    :class:`agents.scheme.differentiation.Differentiation`:
+    ``{title, grade, subject, strand, subStrand, objectives[],
+    support{learnerProfile, adaptations[{activity, note, ksa}],
+    resourceSwaps[], assessmentCues[]}, onGrade{...}, extension{...},
+    inclusionStrategies[], coreCompetencies[]}``. All three tiers target
+    the same objectives — the studio's differentiation panel should render
+    them as parallel columns, not as separate plans.
+    """
+    try:
+        agent = LessonArchitectAgent(supabase_client=get_supabase_client())
+        result = await agent.generate_differentiation(
+            teacher_id=request.teacher_id,
+            lesson_plan=request.lesson_plan,
+            language=request.language,
+            lesson_plan_id=request.lesson_plan_id,
+        )
+
+        return {
+            "success": True,
+            "differentiation_id": result.get("differentiation_id"),
+            "differentiation": result.get("differentiation", {}),
+            "source": "ai-agents",
+        }
+
+    except Exception as exc:
+        logger.error(
+            "Failed to generate differentiation",
+            error=str(exc),
+            error_type=type(exc).__name__,
+            grade=request.lesson_plan.get("grade") if request.lesson_plan else None,
+            subject=request.lesson_plan.get("subject") if request.lesson_plan else None,
+        )
+        raise HTTPException(
+            status_code=500, detail=f"Failed to generate differentiation: {exc}"
         )
 
 

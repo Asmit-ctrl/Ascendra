@@ -18,10 +18,14 @@ import {
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, Sparkles, Download, FileDown } from 'lucide-react';
+import { Loader2, Sparkles, Download, FileDown, Layers } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { SchemeRow } from '@/types/curriculum';
 import { API_ENDPOINTS, buildApiUrl } from '@/lib/api-config';
+import {
+  DifferentiationRenderer,
+  type Differentiation,
+} from '@/components/teacher/differentiation-renderer';
 
 interface LessonPlanDialogProps {
   open: boolean;
@@ -80,8 +84,14 @@ export default function LessonPlanDialog({
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [plan, setPlan] = useState<LessonPlan | null>(null);
+  const [planId, setPlanId] = useState<string | null>(null);
   const [additionalNotes, setAdditionalNotes] = useState('');
   const [step, setStep] = useState<'input' | 'preview'>('input');
+  // Tier 2 differentiation — generated lazily on demand from the open plan.
+  // We keep it as a sibling state rather than nested in `plan` so a
+  // regenerate of the plan doesn't accidentally retain stale tiers.
+  const [differentiation, setDifferentiation] = useState<Differentiation | null>(null);
+  const [diffLoading, setDiffLoading] = useState(false);
   const isSw = isKiswahiliSubject(subject);
 
   const handleGenerate = async () => {
@@ -117,6 +127,9 @@ export default function LessonPlanDialog({
       const data = await response.json();
       // Python endpoint returns { success, lesson_plan, lesson_plan_id, source }.
       setPlan(data.lesson_plan ?? data.plan);
+      setPlanId(data.lesson_plan_id ?? null);
+      // Clear any previous tiers — they were generated against the old plan.
+      setDifferentiation(null);
       setStep('preview');
 
       toast({ title: 'Lesson Plan Generated!' });
@@ -130,6 +143,57 @@ export default function LessonPlanDialog({
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDifferentiate = async () => {
+    if (!plan) return;
+    setDiffLoading(true);
+    try {
+      const response = await fetch(
+        buildApiUrl(API_ENDPOINTS.LESSON_ARCHITECT_GENERATE_DIFFERENTIATION),
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            teacher_id: teacherId ?? 'unknown',
+            // Pass the camelCase plan straight through — the backend's
+            // _required_lesson_plan_keys guard reads grade/subject/strand/
+            // subStrand/objectives from the same shape this component
+            // already holds.
+            lesson_plan: plan,
+            lesson_plan_id: planId ?? undefined,
+            language: isSw ? 'kiswahili' : 'english',
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(
+          error.detail || error.error || 'Failed to generate differentiation'
+        );
+      }
+
+      const data = await response.json();
+      setDifferentiation(data.differentiation ?? null);
+
+      toast({
+        title: isSw ? 'Tofautisha Tayari!' : 'Differentiation Ready!',
+        description: isSw
+          ? 'Mikakati ya tabaka tatu imezalishwa'
+          : 'Three-tier strategies generated against this lesson',
+      });
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : 'Failed to generate differentiation.';
+      toast({
+        title: 'Generation Failed',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setDiffLoading(false);
     }
   };
 
@@ -180,6 +244,8 @@ export default function LessonPlanDialog({
 
   const resetDialog = () => {
     setPlan(null);
+    setPlanId(null);
+    setDifferentiation(null);
     setStep('input');
     setAdditionalNotes('');
   };
@@ -387,16 +453,47 @@ export default function LessonPlanDialog({
                     variant="outline"
                     onClick={() => {
                       setPlan(null);
+                      setPlanId(null);
+                      setDifferentiation(null);
                       setStep('input');
                     }}
                     className="gap-2"
                   >
                     <Sparkles className="w-4 h-4" /> Regenerate
                   </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleDifferentiate}
+                    disabled={diffLoading}
+                    className="gap-2"
+                  >
+                    {diffLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Layers className="w-4 h-4" />
+                    )}
+                    {diffLoading
+                      ? isSw
+                        ? 'Inazalisha tabaka...'
+                        : 'Generating tiers...'
+                      : differentiation
+                      ? isSw
+                        ? 'Zalisha tena tabaka'
+                        : 'Re-differentiate'
+                      : isSw
+                      ? 'Tofautisha'
+                      : 'Differentiate'}
+                  </Button>
                   <Button onClick={handlePrint} className="gap-2 ml-auto">
                     <Download className="w-4 h-4" /> Export PDF
                   </Button>
                 </div>
+
+                {differentiation && (
+                  <div className="pt-4 border-t mt-4">
+                    <DifferentiationRenderer differentiation={differentiation} />
+                  </div>
+                )}
               </div>
             )}
           </ScrollArea>

@@ -27,6 +27,7 @@ import {
   Target,
   Trophy,
   Map,
+  Sparkles,
 } from 'lucide-react';
 import { StudentHeader } from '@/components/layout/student-header';
 import { GamificationPanel } from '@/components/student/gamification-panel';
@@ -454,6 +455,27 @@ export default function StudentDashboardPage() {
                     onClick={() => router.push('/student/journey')}
                   >
                     Learning Journey
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card className="border-primary/40">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-primary" />
+                    Practice Sandbox
+                  </CardTitle>
+                  <CardDescription>
+                    Drag, build, and explore. Mwalimu learns from how you think.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button
+                    className="w-full"
+                    onClick={() => router.push('/student/sandbox')}
+                  >
+                    Open Sandbox
+                    <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>
                 </CardContent>
               </Card>
