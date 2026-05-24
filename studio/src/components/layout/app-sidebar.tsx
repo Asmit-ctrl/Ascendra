@@ -18,7 +18,14 @@ import {
   Wallet,
   BookUser,
   Megaphone,
-  TrendingUp
+  TrendingUp,
+  Calendar,
+  FileText,
+  ClipboardList,
+  Target,
+  Brain,
+  MessageSquare,
+  Lightbulb
 } from "lucide-react";
 import { usePathname } from 'next/navigation';
 import {
@@ -38,8 +45,16 @@ import { useEffect, useState } from "react";
 
 
 const teacherNavItems = [
-    { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-    { href: "/dashboard/improvements", icon: TrendingUp, label: "Improvements" },
+    { href: "/teacher", icon: LayoutDashboard, label: "Dashboard" },
+    { href: "/teacher/scheme-wizard", icon: Calendar, label: "Schemes of Work" },
+    { href: "/teacher/lesson-plans", icon: FileText, label: "Lesson Plans" },
+    { href: "/teacher/assessments", icon: ClipboardList, label: "Assessments" },
+    { href: "/teacher/students", icon: Users, label: "Student Monitoring" },
+    { href: "/teacher/interventions", icon: Target, label: "Interventions" },
+    { href: "/teacher/resources", icon: Library, label: "Resource Library" },
+    { href: "/teacher/differentiation", icon: Brain, label: "Differentiation Tools" },
+    { href: "/teacher/communication", icon: MessageSquare, label: "Communication" },
+    { href: "/teacher/professional-dev", icon: Lightbulb, label: "Professional Dev" },
 ];
 
 const schoolHeadNavItems = [
