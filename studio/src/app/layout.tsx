@@ -1,70 +1,78 @@
-import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
-import './globals.css';
-import { ClientProviders } from '@/components/client-providers';
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+import { ThemeProvider } from "@/components/theme-provider";
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'Mwalimu AI - CBC Learning Assistant',
-  description: 'Your personal AI tutor for Kenya\'s CBC curriculum. Learn Math, Science, English, and more with Socratic guidance.',
-  keywords: ['CBC', 'Kenya', 'education', 'AI tutor', 'learning', 'Mwalimu', 'homework help'],
-  authors: [{ name: 'Mwalimu AI Team' }],
-  creator: 'Mwalimu AI',
-  publisher: 'Mwalimu AI',
-  manifest: '/manifest.json',
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: 'default',
-    title: 'Mwalimu AI',
-  },
-  formatDetection: {
-    telephone: false,
-  },
+  title: 'Syncsenta - AI-Powered Learning for Kenyan Students',
+  description: 'Personalized CBC-aligned education with AI tutoring. Transform your learning experience with adaptive lessons, instant feedback, and comprehensive curriculum coverage.',
+  keywords: ['CBC education', 'Kenya education', 'AI tutoring', 'personalized learning', 'online education', 'Kenyan curriculum'],
+  authors: [{ name: 'Syncsenta Team' }],
   openGraph: {
-    type: 'website',
+    title: 'Syncsenta - AI-Powered Learning',
+    description: 'Personalized CBC-aligned education with AI tutoring',
+    url: 'https://syncsenta.com',
+    siteName: 'Syncsenta',
+    images: [
+      {
+        url: '/og-image.jpg',
+        width: 1200,
+        height: 630,
+        alt: 'Syncsenta - AI-Powered Learning Platform',
+      },
+    ],
     locale: 'en_KE',
-    url: 'https://mwalimu.ai',
-    title: 'Mwalimu AI - CBC Learning Assistant',
-    description: 'Your personal AI tutor for Kenya\'s CBC curriculum',
-    siteName: 'Mwalimu AI',
+    type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Mwalimu AI - CBC Learning Assistant',
-    description: 'Your personal AI tutor for Kenya\'s CBC curriculum',
+    title: 'Syncsenta - AI-Powered Learning',
+    description: 'Personalized CBC-aligned education with AI tutoring',
+    images: ['/og-image.jpg'],
+    creator: '@syncsenta',
   },
   robots: {
     index: true,
     follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
   },
-};
-
-export const viewport: Viewport = {
-  width: 'device-width',
-  initialScale: 1,
-  maximumScale: 5,
-  userScalable: true,
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
-    { media: '(prefers-color-scheme: dark)', color: '#0a0a0a' },
-  ],
+  verification: {
+    google: 'your-google-verification-code',
+  },
 };
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <link rel="icon" href="/favicon.ico" sizes="any" />
-        <link rel="apple-touch-icon" href="/icon-192.png" />
+        <link rel="icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <meta name="theme-color" content="#000000" />
       </head>
       <body className={inter.className}>
-        <ClientProviders>{children}</ClientProviders>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );
 }
+
+// Made with Bob
