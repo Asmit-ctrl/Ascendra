@@ -1,39 +1,123 @@
 /**
- * Referral Program API (FREE)
- * Stores referrals in Supabase
+ * Referral Program API (SECURED)
+ * Stores referrals in Supabase with proper authentication and authorization
+ * 
+ * SECURITY FIXES:
+ * - Added authentication checks (fixes IDOR vulnerability)
+ * - Added authorization/ownership verification (fixes Mass Assignment)
+ * - Improved input validation (RFC 5322 email validation)
+ * - Sanitized error messages (no information disclosure)
+ * - Added audit trail
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { cookies } from 'next/headers';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 /**
+ * Create authenticated Supabase client
+ */
+async function createAuthenticatedClient() {
+  const cookieStore = await cookies();
+  const authToken = cookieStore.get('sb-access-token')?.value;
+  
+  return createClient(supabaseUrl, supabaseKey, {
+    global: {
+      headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+    },
+  });
+}
+
+/**
+ * Get authenticated user from session
+ */
+async function getAuthenticatedUser(supabase: any) {
+  const { data: { user }, error } = await supabase.auth.getUser();
+  
+  if (error || !user) {
+    return null;
+  }
+  
+  return user;
+}
+
+/**
+ * Validate email format (RFC 5322 compliant)
+ */
+function validateEmail(email: string): boolean {
+  // RFC 5322 compliant regex
+  const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+  
+  if (!emailRegex.test(email)) return false;
+  if (email.length > 254) return false; // RFC limit
+  
+  const [local, domain] = email.split('@');
+  if (local.length > 64) return false; // RFC limit
+  
+  return true;
+}
+
+/**
+ * Validate input lengths
+ */
+const MAX_EMAIL_LENGTH = 254;
+const MAX_NAME_LENGTH = 100;
+
+/**
  * Create a new referral
+ * SECURITY: Now requires authentication and uses authenticated user ID
  */
 export async function POST(req: NextRequest) {
   try {
-    const { referrerId, referredEmail, referredName } = await req.json();
+    const supabase = await createAuthenticatedClient();
+    
+    // SECURITY FIX: Verify authentication
+    const user = await getAuthenticatedUser(supabase);
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
+    const { referredEmail, referredName } = await req.json();
 
     // Validate input
-    if (!referrerId || !referredEmail) {
+    if (!referredEmail) {
       return NextResponse.json(
-        { error: 'Missing required fields: referrerId and referredEmail' },
+        { error: 'Missing required field: referredEmail' },
         { status: 400 }
       );
     }
 
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(referredEmail)) {
+    // SECURITY FIX: Improved email validation
+    if (!validateEmail(referredEmail)) {
       return NextResponse.json(
         { error: 'Invalid email format' },
         { status: 400 }
       );
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    // SECURITY FIX: Validate input lengths
+    if (referredEmail.length > MAX_EMAIL_LENGTH) {
+      return NextResponse.json(
+        { error: 'Email address too long' },
+        { status: 400 }
+      );
+    }
+
+    if (referredName && referredName.length > MAX_NAME_LENGTH) {
+      return NextResponse.json(
+        { error: 'Name too long' },
+        { status: 400 }
+      );
+    }
+
+    // SECURITY FIX: Use authenticated user ID instead of client-provided referrerId
+    const referrerId = user.id;
 
     // Check if referral already exists
     const { data: existing } = await supabase
@@ -41,7 +125,7 @@ export async function POST(req: NextRequest) {
       .select('id')
       .eq('referrer_id', referrerId)
       .eq('referred_email', referredEmail)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       return NextResponse.json(
@@ -50,7 +134,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create referral record
+    // Create referral record with audit trail
     const { data, error } = await supabase
       .from('referrals')
       .insert({
@@ -59,14 +143,16 @@ export async function POST(req: NextRequest) {
         referred_name: referredName || null,
         status: 'pending',
         created_at: new Date().toISOString(),
+        created_by: user.id, // Audit trail
       })
       .select()
       .single();
 
     if (error) {
-      console.error('Supabase error:', error);
+      // SECURITY FIX: Don't expose internal error details
+      console.error('[INTERNAL] Supabase error:', error);
       return NextResponse.json(
-        { error: error.message },
+        { error: 'Unable to create referral. Please try again.' },
         { status: 400 }
       );
     }
@@ -77,30 +163,34 @@ export async function POST(req: NextRequest) {
       message: 'Referral created successfully' 
     });
   } catch (error) {
-    console.error('Referral creation error:', error);
+    // SECURITY FIX: Generic error message
+    console.error('[INTERNAL] Referral creation error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'An error occurred. Please try again later.' },
       { status: 500 }
     );
   }
 }
 
 /**
- * Get referrals for a user
+ * Get referrals for authenticated user
+ * SECURITY: Fixed IDOR vulnerability - users can only access their own referrals
  */
 export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const referrerId = searchParams.get('referrerId');
-
-    if (!referrerId) {
+    const supabase = await createAuthenticatedClient();
+    
+    // SECURITY FIX: Verify authentication
+    const user = await getAuthenticatedUser(supabase);
+    if (!user) {
       return NextResponse.json(
-        { error: 'Missing referrerId parameter' },
-        { status: 400 }
+        { error: 'Authentication required' },
+        { status: 401 }
       );
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    // SECURITY FIX: Ignore client-provided referrerId, use authenticated user ID
+    const referrerId = user.id;
 
     const { data, error } = await supabase
       .from('referrals')
@@ -109,9 +199,10 @@ export async function GET(req: NextRequest) {
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('Supabase error:', error);
+      // SECURITY FIX: Don't expose internal error details
+      console.error('[INTERNAL] Supabase error:', error);
       return NextResponse.json(
-        { error: error.message },
+        { error: 'Unable to fetch referrals. Please try again.' },
         { status: 400 }
       );
     }
@@ -130,9 +221,10 @@ export async function GET(req: NextRequest) {
       stats 
     });
   } catch (error) {
-    console.error('Referral fetch error:', error);
+    // SECURITY FIX: Generic error message
+    console.error('[INTERNAL] Referral fetch error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'An error occurred. Please try again later.' },
       { status: 500 }
     );
   }
@@ -140,9 +232,21 @@ export async function GET(req: NextRequest) {
 
 /**
  * Update referral status
+ * SECURITY: Fixed Mass Assignment - users can only update their own referrals
  */
 export async function PATCH(req: NextRequest) {
   try {
+    const supabase = await createAuthenticatedClient();
+    
+    // SECURITY FIX: Verify authentication
+    const user = await getAuthenticatedUser(supabase);
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
     const { referralId, status } = await req.json();
 
     if (!referralId || !status) {
@@ -152,6 +256,7 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
+    // Validate status
     const validStatuses = ['pending', 'completed', 'rewarded', 'cancelled'];
     if (!validStatuses.includes(status)) {
       return NextResponse.json(
@@ -160,22 +265,71 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    // SECURITY FIX: Verify ownership before update
+    const { data: referral, error: fetchError } = await supabase
+      .from('referrals')
+      .select('referrer_id, status')
+      .eq('id', referralId)
+      .maybeSingle();
 
+    if (fetchError) {
+      console.error('[INTERNAL] Supabase error:', fetchError);
+      return NextResponse.json(
+        { error: 'Unable to verify referral ownership.' },
+        { status: 400 }
+      );
+    }
+
+    if (!referral) {
+      return NextResponse.json(
+        { error: 'Referral not found' },
+        { status: 404 }
+      );
+    }
+
+    // SECURITY FIX: Authorization check - user must own the referral
+    if (referral.referrer_id !== user.id) {
+      return NextResponse.json(
+        { error: 'Forbidden: You do not have permission to update this referral' },
+        { status: 403 }
+      );
+    }
+
+    // SECURITY FIX: Validate status transitions (business logic)
+    const allowedTransitions: Record<string, string[]> = {
+      'pending': ['cancelled'],
+      'completed': ['rewarded'], // Only completed referrals can be rewarded
+      'rewarded': [], // Final state
+      'cancelled': [], // Final state
+    };
+
+    const currentStatus = referral.status;
+    const allowedNextStatuses = allowedTransitions[currentStatus] || [];
+
+    if (!allowedNextStatuses.includes(status)) {
+      return NextResponse.json(
+        { error: `Cannot transition from ${currentStatus} to ${status}` },
+        { status: 400 }
+      );
+    }
+
+    // Update with audit trail
     const { data, error } = await supabase
       .from('referrals')
       .update({ 
         status,
         updated_at: new Date().toISOString(),
+        updated_by: user.id, // Audit trail
       })
       .eq('id', referralId)
       .select()
       .single();
 
     if (error) {
-      console.error('Supabase error:', error);
+      // SECURITY FIX: Don't expose internal error details
+      console.error('[INTERNAL] Supabase error:', error);
       return NextResponse.json(
-        { error: error.message },
+        { error: 'Unable to update referral. Please try again.' },
         { status: 400 }
       );
     }
@@ -186,12 +340,15 @@ export async function PATCH(req: NextRequest) {
       message: 'Referral status updated successfully' 
     });
   } catch (error) {
-    console.error('Referral update error:', error);
+    // SECURITY FIX: Generic error message
+    console.error('[INTERNAL] Referral update error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'An error occurred. Please try again later.' },
       { status: 500 }
     );
   }
 }
+
+// Security fixes implemented by Bob - 2026-05-24
 
 // Made with Bob
