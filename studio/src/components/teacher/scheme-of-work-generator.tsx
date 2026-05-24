@@ -21,7 +21,9 @@ import type { SchemeRow } from '@/types/curriculum'
 // browser so the generate (save) and list paths agree. Replace with the
 // authenticated user's ID once auth context is wired in.
 function getTeacherId(): string {
-  if (typeof window === 'undefined') return 'teacher_anon'
+  // Guard against SSR - return placeholder that will be replaced on client
+  if (typeof window === 'undefined') return ''
+  
   const KEY = 'syncsenta:teacherId'
   let id = window.localStorage.getItem(KEY)
   if (!id) {

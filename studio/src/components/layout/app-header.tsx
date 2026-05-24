@@ -43,6 +43,9 @@ export function AppHeader() {
   const [title, setTitle] = useState('Dashboard');
 
   useEffect(() => {
+    // Guard against SSR
+    if (typeof window === 'undefined') return;
+    
     const storedName = localStorage.getItem('userName');
     const storedEmail = localStorage.getItem('userEmail');
     const storedAvatar = localStorage.getItem('userAvatar');

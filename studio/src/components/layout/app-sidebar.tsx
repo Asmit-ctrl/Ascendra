@@ -62,9 +62,19 @@ export function AppSidebar() {
   const [role, setRole] = useState<UserRole | null>(null);
 
   useEffect(() => {
+    // Guard against SSR
+    if (typeof window === 'undefined') return;
+    
     const fetchRole = async () => {
-         const user = await getServerUser();
-         setRole(user?.role as UserRole);
+         try {
+           const user = await getServerUser();
+           setRole(user?.role as UserRole);
+         } catch (error) {
+           console.error('Failed to fetch user role:', error);
+           // Fallback to localStorage if server action fails
+           const storedRole = localStorage.getItem('userRole') as UserRole;
+           if (storedRole) setRole(storedRole);
+         }
     }
     fetchRole();
   }, []);
