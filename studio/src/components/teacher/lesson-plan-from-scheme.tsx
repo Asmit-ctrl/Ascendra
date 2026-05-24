@@ -48,6 +48,12 @@ export function LessonPlanFromScheme() {
   const loadSchemes = async () => {
     setLoading(true)
     try {
+      // Guard against SSR
+      if (typeof window === 'undefined') {
+        setLoading(false)
+        return
+      }
+      
       const teacherId = localStorage.getItem('userId') || 'teacher_001'
       const response = await fetch(
         `${buildApiUrl(API_ENDPOINTS.LESSON_ARCHITECT_SCHEMES)}?teacher_id=${teacherId}`
@@ -87,6 +93,9 @@ export function LessonPlanFromScheme() {
       })
       return
     }
+
+    // Guard against SSR
+    if (typeof window === 'undefined') return
 
     setOriginalOutcome(outcome)
     setUnpacking(true)
@@ -163,7 +172,11 @@ export function LessonPlanFromScheme() {
                 Go to the <strong>Schemes of Work</strong> tab to create your first scheme.
               </p>
             </div>
-            <Button onClick={() => window.location.reload()} variant="outline">
+            <Button onClick={() => {
+              if (typeof window !== 'undefined') {
+                window.location.reload()
+              }
+            }} variant="outline">
               <Sparkles className="mr-2 h-4 w-4" />
               Refresh
             </Button>
@@ -208,7 +221,6 @@ export function LessonPlanFromScheme() {
               grade={selectedScheme.grade}
               term={selectedScheme.term}
               onGenerateLessonPlan={handleGenerateLessonPlan}
-              onUnpackOutcome={handleUnpackOutcome}
             />
           </CardContent>
         </Card>

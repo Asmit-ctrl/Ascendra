@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -10,13 +10,14 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Loader2, Sparkles, FileText, ClipboardList, BookOpen, Users, MessageSquare, Award, Brain, Download, Copy, Check, Calendar } from 'lucide-react'
+import { Loader2, Sparkles, FileText, ClipboardList, BookOpen, Users, MessageSquare, Award, Brain, Download, Copy, Check, Calendar, WifiOff } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { SchemeOfWorkGenerator } from './scheme-of-work-generator'
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/api-config'
 import { WorksheetRenderer } from './worksheet-renderer'
 import { TextLevelerRenderer } from './text-leveler-renderer'
 import { DifferentiationRenderer } from './differentiation-renderer'
+import { fetchWithRetry, isOnline, requestQueue } from '@/lib/api-utils'
 import '@/styles/print.css'
 
 export function MagicSchoolTeacher() {
@@ -25,6 +26,7 @@ export function MagicSchoolTeacher() {
   const [loading, setLoading] = useState(false)
   const [generatedContent, setGeneratedContent] = useState('')
   const [copied, setCopied] = useState(false)
+  const [isOffline, setIsOffline] = useState(false)
 
   // Form states
   const [grade, setGrade] = useState('Grade 4')
@@ -43,11 +45,37 @@ export function MagicSchoolTeacher() {
   const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9']
   const subjects = ['Mathematics', 'English', 'Kiswahili', 'Science', 'Social Studies', 'CRE', 'IRE', 'HRE', 'Creative Arts', 'Agriculture']
 
-  const generateContent = async (type: string) => {
+  // Monitor network status
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false)
+    const handleOffline = () => setIsOffline(true)
+
+    setIsOffline(!isOnline())
+    
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [])
+
+  const generateContent = useCallback(async (type: string) => {
     if (!topic.trim()) {
       toast({
         title: 'Missing Information',
         description: 'Please enter a topic',
+        variant: 'destructive'
+      })
+      return
+    }
+
+    // Check network status before starting
+    if (isOffline) {
+      toast({
+        title: 'No Internet Connection',
+        description: 'Please check your network and try again',
         variant: 'destructive'
       })
       return
@@ -74,21 +102,25 @@ export function MagicSchoolTeacher() {
           reflection: `Reflect on how well learners grasped ${topic}`,
         }
 
-        const response = await fetch(
-          buildApiUrl(API_ENDPOINTS.LESSON_ARCHITECT_GENERATE_WORKSHEET),
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              teacher_id: teacherId,
-              grade,
-              subject,
-              term: 'Term 1',
-              language: 'english',
-              duration_minutes: Number(duration),
-              row,
-            }),
-          }
+        const response = await requestQueue.add(() =>
+          fetchWithRetry(
+            buildApiUrl(API_ENDPOINTS.LESSON_ARCHITECT_GENERATE_WORKSHEET),
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                teacher_id: teacherId,
+                grade,
+                subject,
+                term: 'Term 1',
+                language: 'english',
+                duration_minutes: Number(duration),
+                row,
+              }),
+              retries: 3,
+              timeout: 60000,
+            }
+          )
         )
 
         if (!response.ok) {
@@ -115,20 +147,24 @@ export function MagicSchoolTeacher() {
           return
         }
 
-        const response = await fetch(
-          buildApiUrl(API_ENDPOINTS.LESSON_ARCHITECT_GENERATE_TEXT_LEVELER),
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              teacher_id: teacherId,
-              grade,
-              subject,
-              language: 'english',
-              input_text: inputText || undefined,
-              source_url: sourceUrl || undefined,
-            }),
-          }
+        const response = await requestQueue.add(() =>
+          fetchWithRetry(
+            buildApiUrl(API_ENDPOINTS.LESSON_ARCHITECT_GENERATE_TEXT_LEVELER),
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                teacher_id: teacherId,
+                grade,
+                subject,
+                language: 'english',
+                input_text: inputText || undefined,
+                source_url: sourceUrl || undefined,
+              }),
+              retries: 3,
+              timeout: 60000,
+            }
+          )
         )
 
         if (!response.ok) {
@@ -192,17 +228,21 @@ export function MagicSchoolTeacher() {
           resources: ['Classroom board', 'Student notebooks'],
         }
 
-        const response = await fetch(
-          buildApiUrl(API_ENDPOINTS.LESSON_ARCHITECT_GENERATE_DIFFERENTIATION),
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              teacher_id: teacherId,
-              lesson_plan: lessonPlan,
-              language: 'english',
-            }),
-          }
+        const response = await requestQueue.add(() =>
+          fetchWithRetry(
+            buildApiUrl(API_ENDPOINTS.LESSON_ARCHITECT_GENERATE_DIFFERENTIATION),
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                teacher_id: teacherId,
+                lesson_plan: lessonPlan,
+                language: 'english',
+              }),
+              retries: 3,
+              timeout: 60000,
+            }
+          )
         )
 
         if (!response.ok) {
@@ -293,19 +333,23 @@ Tone: Professional, warm, encouraging. Kenyan context.`
           break
       }
 
-      const response = await fetch(buildApiUrl(API_ENDPOINTS.AGENTS_CHAT), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: prompt,
-          user_id: 'teacher_001',
-          session_id: `teacher_${Date.now()}`,
-          grade: grade,
-          subject: subject,
-          language: 'english',
-          role: 'teacher'
+      const response = await requestQueue.add(() =>
+        fetchWithRetry(buildApiUrl(API_ENDPOINTS.AGENTS_CHAT), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: prompt,
+            user_id: 'teacher_001',
+            session_id: `teacher_${Date.now()}`,
+            grade: grade,
+            subject: subject,
+            language: 'english',
+            role: 'teacher'
+          }),
+          retries: 3,
+          timeout: 60000,
         })
-      })
+      )
 
       if (!response.ok) {
         throw new Error('Failed to generate content')
@@ -325,17 +369,18 @@ Tone: Professional, warm, encouraging. Kenyan context.`
 
     } catch (error) {
       console.error('Generation error:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Please try again'
       toast({
         title: 'Generation Failed',
-        description: error instanceof Error ? error.message : 'Please try again',
+        description: errorMessage,
         variant: 'destructive'
       })
     } finally {
       setLoading(false)
     }
-  }
+  }, [topic, grade, subject, duration, learningObjectives, inputText, sourceUrl, toast, isOffline])
 
-  const copyToClipboard = () => {
+  const copyToClipboard = useCallback(() => {
     navigator.clipboard.writeText(generatedContent)
     setCopied(true)
     toast({
@@ -343,9 +388,9 @@ Tone: Professional, warm, encouraging. Kenyan context.`
       description: 'Content copied to clipboard'
     })
     setTimeout(() => setCopied(false), 2000)
-  }
+  }, [generatedContent, toast])
 
-  const downloadAsDoc = () => {
+  const downloadAsDoc = useCallback(() => {
     const blob = new Blob([generatedContent], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -357,15 +402,15 @@ Tone: Professional, warm, encouraging. Kenyan context.`
       title: 'Downloaded!',
       description: 'File saved to your downloads'
     })
-  }
+  }, [generatedContent, toast])
 
-  const printToPDF = () => {
+  const printToPDF = useCallback(() => {
     window.print()
     toast({
       title: 'Print Dialog Opened',
       description: 'Select "Save as PDF" to download'
     })
-  }
+  }, [toast])
 
   return (
     <div className="container mx-auto p-6 max-w-7xl">
@@ -374,6 +419,12 @@ Tone: Professional, warm, encouraging. Kenyan context.`
           <Sparkles className="h-8 w-8 text-primary" />
           <h1 className="text-4xl font-bold">Magic School AI</h1>
           <Badge variant="secondary">For Kenyan Teachers</Badge>
+          {isOffline && (
+            <Badge variant="destructive" className="gap-1">
+              <WifiOff className="h-3 w-3" />
+              Offline
+            </Badge>
+          )}
         </div>
         <p className="text-muted-foreground">
           Generate CBC-aligned lesson plans, quizzes, worksheets, and more in seconds

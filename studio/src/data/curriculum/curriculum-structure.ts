@@ -1,63 +1,81 @@
 import { getHardcodedStrands, getSubjectsForGrade } from './index'
 
-// Create a structured curriculum data object for easy access
-export const curriculumData = {
+// Lazy-loaded curriculum data structure to avoid server-side initialization issues
+// Data is loaded on-demand when accessed, preventing 500 errors during SSR
+type CurriculumStructure = {
   'lower-primary': {
-    'grade-1': {
-      'creative-activities': getHardcodedStrands('Grade 1', 'Creative Activities'),
-      'cre': getHardcodedStrands('Grade 1', 'CRE'),
-      'hre': getHardcodedStrands('Grade 1', 'HRE'),
-      'ire': getHardcodedStrands('Grade 1', 'IRE'),
-      'kiswahili': getHardcodedStrands('Grade 1', 'Kiswahili'),
-      'environmental-activities': getHardcodedStrands('Grade 1', 'Environmental Activities'),
-      'english-activities': getHardcodedStrands('Grade 1', 'English Activities'),
-      'mathematics': getHardcodedStrands('Grade 1', 'Mathematics'),
-    },
-    'grade-2': {
-      'creative-activities': getHardcodedStrands('Grade 2', 'Creative Activities'),
-      'cre': getHardcodedStrands('Grade 2', 'CRE'),
-      'hre': getHardcodedStrands('Grade 2', 'HRE'),
-      'ire': getHardcodedStrands('Grade 2', 'IRE'),
-      'kiswahili': getHardcodedStrands('Grade 2', 'Kiswahili'),
-      'environmental-activities': getHardcodedStrands('Grade 2', 'Environmental Activities'),
-      'english-activities': getHardcodedStrands('Grade 2', 'English Activities'),
-      'mathematics': getHardcodedStrands('Grade 2', 'Mathematics'),
-    },
-    'grade-3': {
-      'creative-activities': getHardcodedStrands('Grade 3', 'Creative Activities'),
-      'cre': getHardcodedStrands('Grade 3', 'CRE'),
-      'hre': getHardcodedStrands('Grade 3', 'HRE'),
-      'ire': getHardcodedStrands('Grade 3', 'IRE'),
-      'kiswahili': getHardcodedStrands('Grade 3', 'Kiswahili'),
-      'environmental-activities': getHardcodedStrands('Grade 3', 'Environmental Activities'),
-      'english-activities': getHardcodedStrands('Grade 3', 'English Activities'),
-      'mathematics': getHardcodedStrands('Grade 3', 'Mathematics'),
-    },
-  },
+    'grade-1': Record<string, any>
+    'grade-2': Record<string, any>
+    'grade-3': Record<string, any>
+  }
   'upper-primary': {
-    'grade-4': {
-      'agriculture': getHardcodedStrands('Grade 4', 'Agriculture'),
-      'cre': getHardcodedStrands('Grade 4', 'CRE'),
-      'creative-arts': getHardcodedStrands('Grade 4', 'Creative Arts'),
-      'english': getHardcodedStrands('Grade 4', 'English'),
-      'indigenous-language': getHardcodedStrands('Grade 4', 'Indigenous Language'),
-      'social-studies': getHardcodedStrands('Grade 4', 'Social Studies'),
-      'science-technology': getHardcodedStrands('Grade 4', 'Science & Technology'),
-      'kiswahili': getHardcodedStrands('Grade 4', 'Kiswahili'),
-    },
-    'grade-5': {
-      'creative-arts': getHardcodedStrands('Grade 5', 'Creative Arts'),
-      'english': getHardcodedStrands('Grade 5', 'English'),
-      'indigenous-language': getHardcodedStrands('Grade 5', 'Indigenous Language'),
-      'mathematics': getHardcodedStrands('Grade 5', 'Mathematics'),
-    },
-    'grade-6': {
-      'agriculture': getHardcodedStrands('Grade 6', 'Agriculture'),
-      'english': getHardcodedStrands('Grade 6', 'English'),
-      'indigenous-language': getHardcodedStrands('Grade 6', 'Indigenous Language'),
-      'kiswahili': getHardcodedStrands('Grade 6', 'Kiswahili'),
-      'mathematics': getHardcodedStrands('Grade 6', 'Mathematics'),
-      'social-studies': getHardcodedStrands('Grade 6', 'Social Studies'),
-    },
-  },
+    'grade-4': Record<string, any>
+    'grade-5': Record<string, any>
+    'grade-6': Record<string, any>
+  }
 }
+
+let _curriculumDataCache: CurriculumStructure | null = null
+
+// Lazy getter that only loads data when first accessed
+export const curriculumData = new Proxy({} as CurriculumStructure, {
+  get(target, level: string) {
+    // Initialize cache on first access
+    if (!_curriculumDataCache) {
+      _curriculumDataCache = {
+        'lower-primary': {
+          'grade-1': {},
+          'grade-2': {},
+          'grade-3': {},
+        },
+        'upper-primary': {
+          'grade-4': {},
+          'grade-5': {},
+          'grade-6': {},
+        },
+      }
+    }
+
+    const levelData = _curriculumDataCache[level as keyof CurriculumStructure]
+    if (!levelData) return undefined
+
+    // Return a proxy for the grade level
+    return new Proxy(levelData, {
+      get(gradeTarget, grade: string) {
+        const gradeData = gradeTarget[grade as keyof typeof gradeTarget]
+        if (!gradeData) return undefined
+
+        // Return a proxy for the subject level that loads data on demand
+        return new Proxy(gradeData, {
+          get(subjectTarget, subject: string) {
+            // Check if already loaded
+            if (subjectTarget[subject]) {
+              return subjectTarget[subject]
+            }
+
+            // Load on demand
+            const gradeKey = grade.replace('grade-', 'Grade ')
+            const subjectKey = subject
+              .split('-')
+              .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+              .join(' ')
+              .replace('Cre', 'CRE')
+              .replace('Hre', 'HRE')
+              .replace('Ire', 'IRE')
+              .replace('English Activities', 'English Activities')
+              .replace('Environmental Activities', 'Environmental Activities')
+              .replace('Creative Activities', 'Creative Activities')
+              .replace('Creative Arts', 'Creative Arts')
+              .replace('Science Technology', 'Science & Technology')
+              .replace('Indigenous Language', 'Indigenous Language')
+              .replace('Social Studies', 'Social Studies')
+
+            const data = getHardcodedStrands(gradeKey, subjectKey)
+            subjectTarget[subject] = data
+            return data
+          }
+        })
+      }
+    })
+  }
+})

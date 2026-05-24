@@ -69,7 +69,13 @@ export const API_ENDPOINTS = {
   DASHBOARD_AGENTS_STATS: '/dashboard/agents/stats',
   DASHBOARD_STUDENTS_ACTIVE: '/dashboard/students/active',
   DASHBOARD_STUDENTS_PROGRESS: (studentId: string) => `/dashboard/students/${studentId}/progress`,
+  DASHBOARD_STUDENTS_MISCONCEPTIONS: (studentId: string) => `/dashboard/students/${studentId}/misconceptions`,
+  DASHBOARD_STUDENTS_INTERVENTIONS: (studentId: string) => `/dashboard/students/${studentId}/interventions`,
+  DASHBOARD_STUDENTS_TIMELINE: (studentId: string) => `/dashboard/students/${studentId}/timeline`,
+  DASHBOARD_COMPETENCIES_SUMMARY: '/dashboard/competencies/summary',
+  DASHBOARD_COMPETENCIES_TRENDS: (competency: string) => `/dashboard/competencies/${competency}/trends`,
   DASHBOARD_INTERVENTIONS: '/dashboard/interventions',
+  DASHBOARD_ALERTS: '/dashboard/alerts',
   DASHBOARD_WS_TEACHER: '/dashboard/ws/teacher',
   
   // Telemetry endpoints
