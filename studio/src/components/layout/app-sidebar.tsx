@@ -39,9 +39,22 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { useSidebar } from "@/components/ui/sidebar";
-import { getServerUser } from "@/lib/auth";
-import type { UserRole } from "@/lib/types";
 import { useEffect, useState } from "react";
+
+// Client-side function to get user role from cookies
+function getClientRole(): UserRole | null {
+  if (typeof window === 'undefined') return null;
+  
+  const getCookie = (name: string) => {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop()?.split(';').shift();
+    return null;
+  };
+  
+  const role = getCookie('userRole') as UserRole;
+  return role || null;
+}
 
 
 const teacherNavItems = [
@@ -81,14 +94,10 @@ export function AppSidebar() {
     if (typeof window === 'undefined') return;
     
     const fetchRole = async () => {
-         try {
-           const user = await getServerUser();
-           setRole(user?.role as UserRole);
-         } catch (error) {
-           console.error('Failed to fetch user role:', error);
-           // Fallback to localStorage if server action fails
-           const storedRole = localStorage.getItem('userRole') as UserRole;
-           if (storedRole) setRole(storedRole);
+         // Use client-side cookie reading only
+         const role = getClientRole();
+         if (role) {
+           setRole(role);
          }
     }
     fetchRole();
