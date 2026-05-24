@@ -1,6 +1,12 @@
 /**
  * Simple Analytics System (FREE)
  * Uses localStorage for basic event tracking
+ *
+ * SECURITY: NoSQL Injection Protection
+ * - Validates all user IDs and session IDs
+ * - Sanitizes event names and properties
+ * - Uses strict type checking
+ * - Prevents query manipulation
  */
 
 interface Event {
@@ -9,6 +15,60 @@ interface Event {
   timestamp: string;
   userId?: string;
   sessionId?: string;
+}
+
+/**
+ * Validate UUID v4 format
+ * SECURITY: Ensures IDs match expected format to prevent injection
+ */
+function isValidUUID(uuid: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(uuid);
+}
+
+/**
+ * Sanitize event name
+ * SECURITY: Removes special characters that could be used for injection
+ */
+function sanitizeEventName(name: string): string {
+  if (!name || typeof name !== 'string') {
+    throw new Error('Invalid event name');
+  }
+  
+  // Allow only alphanumeric, underscore, hyphen, and space
+  return name.replace(/[^a-zA-Z0-9_\-\s]/g, '').trim().substring(0, 100);
+}
+
+/**
+ * Sanitize properties object
+ * SECURITY: Recursively sanitizes all property values
+ */
+function sanitizeProperties(properties: Record<string, any>): Record<string, any> {
+  const sanitized: Record<string, any> = {};
+  
+  for (const [key, value] of Object.entries(properties)) {
+    // Sanitize key
+    const sanitizedKey = key.replace(/[^a-zA-Z0-9_]/g, '').substring(0, 50);
+    
+    if (!sanitizedKey) continue;
+    
+    // Sanitize value based on type
+    if (typeof value === 'string') {
+      sanitized[sanitizedKey] = value.substring(0, 500); // Limit string length
+    } else if (typeof value === 'number') {
+      sanitized[sanitizedKey] = isFinite(value) ? value : 0;
+    } else if (typeof value === 'boolean') {
+      sanitized[sanitizedKey] = value;
+    } else if (value === null) {
+      sanitized[sanitizedKey] = null;
+    } else if (typeof value === 'object' && !Array.isArray(value)) {
+      // Recursively sanitize nested objects (max 1 level deep)
+      sanitized[sanitizedKey] = sanitizeProperties(value);
+    }
+    // Skip arrays, functions, and other types
+  }
+  
+  return sanitized;
 }
 
 interface AnalyticsSummary {
@@ -25,20 +85,30 @@ const SESSION_KEY = 'analytics_session';
 
 /**
  * Get or create session ID
+ * SECURITY: Validates existing session ID before use
  */
 function getSessionId(): string {
   if (typeof window === 'undefined') return 'server';
   
   let sessionId = sessionStorage.getItem(SESSION_KEY);
+  
+  // SECURITY: Validate existing session ID
+  if (sessionId && !isValidUUID(sessionId)) {
+    console.warn('Invalid session ID detected, generating new one');
+    sessionId = null;
+  }
+  
   if (!sessionId) {
     sessionId = crypto.randomUUID();
     sessionStorage.setItem(SESSION_KEY, sessionId);
   }
+  
   return sessionId;
 }
 
 /**
  * Track an event
+ * SECURITY: Validates and sanitizes all inputs before storage
  */
 export function trackEvent(
   name: string,
@@ -47,28 +117,44 @@ export function trackEvent(
 ): void {
   if (typeof window === 'undefined') return;
 
-  const event: Event = {
-    name,
-    properties,
-    timestamp: new Date().toISOString(),
-    userId,
-    sessionId: getSessionId(),
-  };
+  try {
+    // SECURITY: Sanitize event name
+    const sanitizedName = sanitizeEventName(name);
+    
+    // SECURITY: Validate userId if provided
+    if (userId && !isValidUUID(userId)) {
+      console.warn('Invalid userId provided to trackEvent');
+      userId = undefined;
+    }
+    
+    // SECURITY: Sanitize properties
+    const sanitizedProperties = properties ? sanitizeProperties(properties) : undefined;
 
-  // Store locally
-  const events = getStoredEvents();
-  events.push(event);
-  
-  // Keep last MAX_EVENTS events
-  if (events.length > MAX_EVENTS) {
-    events.shift();
-  }
-  
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
+    const event: Event = {
+      name: sanitizedName,
+      properties: sanitizedProperties,
+      timestamp: new Date().toISOString(),
+      userId,
+      sessionId: getSessionId(),
+    };
 
-  // Log to console in development
-  if (process.env.NODE_ENV === 'development') {
-    console.log('📊 Event:', name, properties);
+    // Store locally
+    const events = getStoredEvents();
+    events.push(event);
+    
+    // Keep last MAX_EVENTS events
+    if (events.length > MAX_EVENTS) {
+      events.shift();
+    }
+    
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
+
+    // Log to console in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log('📊 Event:', sanitizedName, sanitizedProperties);
+    }
+  } catch (error) {
+    console.error('Failed to track event:', error);
   }
 }
 
@@ -120,28 +206,65 @@ export function getAnalytics(): AnalyticsSummary {
 
 /**
  * Get events by name
+ * SECURITY: Sanitizes input to prevent injection
  */
 export function getEventsByName(name: string): Event[] {
-  const events = getStoredEvents();
-  return events.filter(e => e.name === name);
+  try {
+    const sanitizedName = sanitizeEventName(name);
+    const events = getStoredEvents();
+    // SECURITY: Use strict equality check
+    return events.filter(e => e.name === sanitizedName);
+  } catch (error) {
+    console.error('Failed to get events by name:', error);
+    return [];
+  }
 }
 
 /**
  * Get events by user
+ * SECURITY: Validates userId format before querying
  */
 export function getEventsByUser(userId: string): Event[] {
+  // SECURITY: Validate userId format
+  if (!isValidUUID(userId)) {
+    console.warn('Invalid userId provided to getEventsByUser');
+    return [];
+  }
+  
   const events = getStoredEvents();
+  // SECURITY: Use strict equality check
   return events.filter(e => e.userId === userId);
 }
 
 /**
  * Get events in date range
+ * SECURITY: Validates date inputs
  */
 export function getEventsByDateRange(startDate: Date, endDate: Date): Event[] {
+  // SECURITY: Validate date inputs
+  if (!(startDate instanceof Date) || !(endDate instanceof Date)) {
+    console.warn('Invalid date parameters provided');
+    return [];
+  }
+  
+  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+    console.warn('Invalid date values provided');
+    return [];
+  }
+  
+  if (startDate > endDate) {
+    console.warn('Start date is after end date');
+    return [];
+  }
+  
   const events = getStoredEvents();
   return events.filter(e => {
-    const eventDate = new Date(e.timestamp);
-    return eventDate >= startDate && eventDate <= endDate;
+    try {
+      const eventDate = new Date(e.timestamp);
+      return eventDate >= startDate && eventDate <= endDate;
+    } catch (error) {
+      return false;
+    }
   });
 }
 

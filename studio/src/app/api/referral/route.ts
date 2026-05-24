@@ -1,18 +1,20 @@
 /**
  * Referral Program API (SECURED)
  * Stores referrals in Supabase with proper authentication and authorization
- * 
+ *
  * SECURITY FIXES:
  * - Added authentication checks (fixes IDOR vulnerability)
  * - Added authorization/ownership verification (fixes Mass Assignment)
  * - Improved input validation (RFC 5322 email validation)
  * - Sanitized error messages (no information disclosure)
  * - Added audit trail
+ * - Added CSRF protection (fixes CSRF vulnerability)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
+import crypto from 'crypto';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -67,11 +69,80 @@ const MAX_EMAIL_LENGTH = 254;
 const MAX_NAME_LENGTH = 100;
 
 /**
+ * Generate CSRF token
+ * SECURITY: Creates cryptographically secure token
+ */
+function generateCsrfToken(): string {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+/**
+ * Validate CSRF token
+ * SECURITY: Compares tokens using timing-safe comparison
+ */
+function validateCsrfToken(token: string, storedToken: string): boolean {
+  if (!token || !storedToken) return false;
+  
+  // Use timing-safe comparison to prevent timing attacks
+  try {
+    const tokenBuffer = Buffer.from(token, 'hex');
+    const storedBuffer = Buffer.from(storedToken, 'hex');
+    
+    if (tokenBuffer.length !== storedBuffer.length) return false;
+    
+    return crypto.timingSafeEqual(tokenBuffer, storedBuffer);
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
+ * Get or create CSRF token from cookies
+ * SECURITY: Stores token in HTTP-only cookie with SameSite protection
+ */
+async function getCsrfToken(): Promise<string> {
+  const cookieStore = await cookies();
+  let csrfToken = cookieStore.get('csrf-token')?.value;
+  
+  if (!csrfToken) {
+    csrfToken = generateCsrfToken();
+    // Note: Cookie setting is done in middleware for better control
+  }
+  
+  return csrfToken;
+}
+
+/**
+ * Verify CSRF token from request
+ * SECURITY: Validates token from header against cookie
+ */
+async function verifyCsrfToken(req: NextRequest): Promise<boolean> {
+  const cookieStore = await cookies();
+  const storedToken = cookieStore.get('csrf-token')?.value;
+  const headerToken = req.headers.get('x-csrf-token');
+  
+  if (!storedToken || !headerToken) {
+    return false;
+  }
+  
+  return validateCsrfToken(headerToken, storedToken);
+}
+
+/**
  * Create a new referral
- * SECURITY: Now requires authentication and uses authenticated user ID
+ * SECURITY: Now requires authentication, CSRF token, and uses authenticated user ID
  */
 export async function POST(req: NextRequest) {
   try {
+    // SECURITY FIX: Verify CSRF token first
+    const csrfValid = await verifyCsrfToken(req);
+    if (!csrfValid) {
+      return NextResponse.json(
+        { error: 'Invalid or missing CSRF token' },
+        { status: 403 }
+      );
+    }
+    
     const supabase = await createAuthenticatedClient();
     
     // SECURITY FIX: Verify authentication
@@ -233,9 +304,19 @@ export async function GET(req: NextRequest) {
 /**
  * Update referral status
  * SECURITY: Fixed Mass Assignment - users can only update their own referrals
+ * SECURITY: Added CSRF protection
  */
 export async function PATCH(req: NextRequest) {
   try {
+    // SECURITY FIX: Verify CSRF token first
+    const csrfValid = await verifyCsrfToken(req);
+    if (!csrfValid) {
+      return NextResponse.json(
+        { error: 'Invalid or missing CSRF token' },
+        { status: 403 }
+      );
+    }
+    
     const supabase = await createAuthenticatedClient();
     
     // SECURITY FIX: Verify authentication
@@ -344,6 +425,43 @@ export async function PATCH(req: NextRequest) {
     console.error('[INTERNAL] Referral update error:', error);
     return NextResponse.json(
       { error: 'An error occurred. Please try again later.' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * Get CSRF token endpoint
+ * SECURITY: Provides CSRF token to clients
+ */
+export async function OPTIONS(req: NextRequest) {
+  try {
+    const cookieStore = await cookies();
+    let csrfToken = cookieStore.get('csrf-token')?.value;
+    
+    if (!csrfToken) {
+      csrfToken = generateCsrfToken();
+    }
+    
+    const response = NextResponse.json({
+      csrfToken,
+      message: 'Include this token in X-CSRF-Token header for POST/PATCH/DELETE requests'
+    });
+    
+    // Set CSRF token cookie with security flags
+    response.cookies.set('csrf-token', csrfToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 60 * 60 * 24, // 24 hours
+      path: '/',
+    });
+    
+    return response;
+  } catch (error) {
+    console.error('[INTERNAL] CSRF token generation error:', error);
+    return NextResponse.json(
+      { error: 'Unable to generate CSRF token' },
       { status: 500 }
     );
   }
