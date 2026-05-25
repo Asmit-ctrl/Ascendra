@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Gradient for modern edtech feel -->
+    <linearGradient id="primaryGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4F46E5;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7C3AED;stop-opacity:1" />
+    </linearGradient>
+    
+    <linearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#06B6D4;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3B82F6;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background circle -->
+  <circle cx="512" cy="512" r="480" fill="url(#primaryGradient)"/>
+  
+  <!-- Outer ring for structure -->
+  <circle cx="512" cy="512" r="420" fill="none" stroke="white" stroke-width="24" opacity="0.2"/>
+  
+  <!-- Central hub representing knowledge core -->
+  <circle cx="512" cy="512" r="80" fill="white"/>
+  
+  <!-- Three curved learning paths (inspired by triskelion) -->
+  <!-- Path 1: Top-right (representing Digital Learning) -->
+  <g transform="rotate(0 512 512)">
+    <path d="M 512 512 Q 650 380 720 420 Q 750 440 720 480 Q 650 550 580 512" 
+          fill="white" opacity="0.9"/>
+    <circle cx="720" cy="450" r="45" fill="url(#accentGradient)"/>
+    <!-- Book icon for learning -->
+    <path d="M 705 435 L 705 465 L 735 465 L 735 435 Z M 710 440 L 710 460 M 720 440 L 720 460 M 730 440 L 730 460" 
+          stroke="white" stroke-width="3" fill="none"/>
+  </g>
+  
+  <!-- Path 2: Bottom-left (representing Collaboration) -->
+  <g transform="rotate(120 512 512)">
+    <path d="M 512 512 Q 650 380 720 420 Q 750 440 720 480 Q 650 550 580 512" 
+          fill="white" opacity="0.9"/>
+    <circle cx="720" cy="450" r="45" fill="url(#accentGradient)"/>
+    <!-- Network/connection icon -->
+    <circle cx="710" cy="445" r="5" fill="white"/>
+    <circle cx="730" cy="445" r="5" fill="white"/>
+    <circle cx="720" cy="460" r="5" fill="white"/>
+    <line x1="710" y1="445" x2="730" y2="445" stroke="white" stroke-width="2.5"/>
+    <line x1="710" y1="445" x2="720" y2="460" stroke="white" stroke-width="2.5"/>
+    <line x1="730" y1="445" x2="720" y2="460" stroke="white" stroke-width="2.5"/>
+  </g>
+  
+  <!-- Path 3: Bottom-right (representing Innovation) -->
+  <g transform="rotate(240 512 512)">
+    <path d="M 512 512 Q 650 380 720 420 Q 750 440 720 480 Q 650 550 580 512" 
+          fill="white" opacity="0.9"/>
+    <circle cx="720" cy="450" r="45" fill="url(#accentGradient)"/>
+    <!-- Lightbulb icon for innovation -->
+    <circle cx="720" cy="445" r="12" fill="none" stroke="white" stroke-width="2.5"/>
+    <path d="M 715 457 L 715 462 L 725 462 L 725 457" stroke="white" stroke-width="2.5" fill="none"/>
+    <line x1="720" y1="462" x2="720" y2="466" stroke="white" stroke-width="2.5"/>
+  </g>
+  
+  <!-- Central sync symbol (S shape for Syncsenta) -->
+  <path d="M 512 470 Q 540 470 540 490 Q 540 510 512 510 Q 484 510 484 530 Q 484 550 512 550" 
+        stroke="url(#primaryGradient)" stroke-width="16" fill="none" stroke-linecap="round"/>
+  
+  <!-- Small connecting dots showing data flow -->
+  <circle cx="512" cy="432" r="6" fill="url(#accentGradient)"/>
+  <circle cx="512" cy="592" r="6" fill="url(#accentGradient)"/>
+  
+  <!-- Orbital rings suggesting continuous learning -->
+  <ellipse cx="512" cy="512" rx="280" ry="320" fill="none" stroke="white" 
+           stroke-width="3" opacity="0.15" stroke-dasharray="20,15"/>
+  <ellipse cx="512" cy="512" rx="320" ry="280" fill="none" stroke="white" 
+           stroke-width="3" opacity="0.15" stroke-dasharray="20,15"/>
+</svg>
+
+<!-- Made with Bob -->
