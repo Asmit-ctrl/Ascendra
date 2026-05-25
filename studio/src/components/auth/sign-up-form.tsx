@@ -18,6 +18,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
+/**
+ * Map a CBC grade string (e.g. "Grade 5") to the level id used by
+ * /student/journey. Returns null for unrecognised inputs.
+ * Keep in sync with CBC_LEVELS in src/app/student/journey/page.tsx.
+ */
+function deriveLevelFromGrade(grade: string): string | null {
+  if (grade === 'PP1' || grade === 'PP2') return 'pre-primary';
+  const n = parseInt(grade.replace(/[^0-9]/g, ''), 10);
+  if (!Number.isFinite(n)) return null;
+  if (n >= 1 && n <= 3) return 'lower-primary';
+  if (n >= 4 && n <= 6) return 'upper-primary';
+  if (n >= 7 && n <= 9) return 'junior-secondary';
+  if (n >= 10 && n <= 12) return 'senior-secondary';
+  return null;
+}
+
 export function SignUpForm() {
   const router = useRouter();
   const { signUp, signInWithGoogle } = useAuth();
@@ -68,6 +84,16 @@ export function SignUpForm() {
         subscription_tier: 'free',
         subscription_status: 'active',
       });
+
+      // Seed the journey wizard from the signup choice so brand-new students
+      // aren't asked their grade twice. The wizard reads these on mount and
+      // will skip straight to the subject step. sessionStorage (not localStorage)
+      // matches the rest of the journey flow.
+      if (formData.role === 'student' && formData.grade && typeof window !== 'undefined') {
+        const level = deriveLevelFromGrade(formData.grade);
+        window.sessionStorage.setItem('learningJourney.grade', formData.grade);
+        if (level) window.sessionStorage.setItem('learningJourney.level', level);
+      }
 
       // Redirect to dashboard
       router.push('/dashboard');

@@ -110,8 +110,10 @@ export default function StudentDashboardPage() {
 
     setGamificationMode(loadGamificationMode());
 
-    // Check if grade is set - if not, redirect to journey for grade selection
-    const savedGrade = localStorage.getItem('learningJourney.grade');
+    // Check if grade is set - if not, redirect to journey for grade selection.
+    // sessionStorage (not localStorage) so the journey re-appears each fresh tab —
+    // important for shared devices and term-to-term progression.
+    const savedGrade = sessionStorage.getItem('learningJourney.grade');
     if (!savedGrade) {
       router.push('/student/journey');
       return;
@@ -160,14 +162,14 @@ export default function StudentDashboardPage() {
   };
 
   const goToChat = (subject: string) => {
-    const savedGrade = localStorage.getItem('learningJourney.grade');
+    const savedGrade = sessionStorage.getItem('learningJourney.grade');
     if (!savedGrade) {
       router.push('/student/journey');
       return;
     }
-    
+
     // Save subject and go directly to chat
-    localStorage.setItem('learningJourney.subject', subject);
+    sessionStorage.setItem('learningJourney.subject', subject);
     router.push(`/student/chat/${encodeURIComponent(subject)}?grade=${encodeURIComponent(savedGrade)}`);
   };
 

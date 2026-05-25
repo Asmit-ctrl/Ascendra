@@ -12,7 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import crypto from 'crypto';
 
@@ -20,15 +20,35 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 /**
- * Create authenticated Supabase client
+ * Create an authenticated Supabase server client.
+ *
+ * The previous implementation read a `sb-access-token` cookie that
+ * `@supabase/ssr` does not actually set — `createBrowserClient` writes the
+ * session under `sb-<project-ref>-auth-token` (and chunks it into `.0`, `.1`
+ * suffixes when the JWT is large). The mismatch meant `auth.getUser()` always
+ * returned null and every referral request silently 401'd, even for a logged-
+ * in user. Switching to `createServerClient` from `@supabase/ssr` with a
+ * cookies adapter is the supported way to read whatever cookie shape the
+ * browser client produced.
  */
 async function createAuthenticatedClient() {
   const cookieStore = await cookies();
-  const authToken = cookieStore.get('sb-access-token')?.value;
-  
-  return createClient(supabaseUrl, supabaseKey, {
-    global: {
-      headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+
+  return createServerClient(supabaseUrl, supabaseKey, {
+    cookies: {
+      get(name: string) {
+        return cookieStore.get(name)?.value;
+      },
+      // Route handlers can't reliably set cookies on the response from inside
+      // the supabase adapter (the response object isn't in scope here), so we
+      // no-op writes. Token refresh still works because the browser client
+      // refreshes its own cookies; this route only needs to *read* the session.
+      set(_name: string, _value: string, _options: CookieOptions) {
+        /* no-op */
+      },
+      remove(_name: string, _options: CookieOptions) {
+        /* no-op */
+      },
     },
   });
 }
@@ -448,9 +468,17 @@ export async function OPTIONS(req: NextRequest) {
       message: 'Include this token in X-CSRF-Token header for POST/PATCH/DELETE requests'
     });
     
-    // Set CSRF token cookie with security flags
+    // Set CSRF token cookie with security flags.
+    //
+    // NOTE: httpOnly MUST be false here. We use the double-submit cookie
+    // pattern: the client reads this cookie via document.cookie and mirrors
+    // its value into the `x-csrf-token` request header on POST/PATCH. If the
+    // cookie were httpOnly, JavaScript couldn't read it and every state-
+    // changing request would 403 — which is exactly what was happening with
+    // the previous httpOnly: true setting, silently breaking the whole flow.
+    // SameSite=strict + the header-mirror check together still prevent CSRF.
     response.cookies.set('csrf-token', csrfToken, {
-      httpOnly: true,
+      httpOnly: false,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
       maxAge: 60 * 60 * 24, // 24 hours

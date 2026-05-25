@@ -46,14 +46,37 @@ export function middleware(request: NextRequest) {
   }
 
   // Content Security Policy
-  // This is a strict CSP that prevents most XSS attacks
+  // This is a strict CSP that prevents most XSS attacks.
+  //
+  // connect-src is built from env at request time so that:
+  //  - Renaming/redeploying the AI backend doesn't require editing this file
+  //  - Local dev (npm run dev → http://localhost:8080) isn't silently blocked
+  //  - The legacy hardcoded onrender host stays in the list as a fallback so
+  //    existing prod deployments keep working if the env var is missing
+  const aiAgentsUrl = process.env.NEXT_PUBLIC_AI_AGENTS_URL?.trim();
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+  const isDev = process.env.NODE_ENV !== 'production';
+
+  const connectSrc = [
+    "'self'",
+    'https://*.supabase.co',
+    'wss://*.supabase.co',
+    'https://ascendra-1.onrender.com',
+    aiAgentsUrl,
+    apiUrl,
+    isDev ? 'http://localhost:*' : null,
+    isDev ? 'ws://localhost:*' : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   const cspHeader = `
     default-src 'self';
     script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com;
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
     img-src 'self' data: https: blob:;
     font-src 'self' https://fonts.gstatic.com;
-    connect-src 'self' https://*.supabase.co https://ascendra-1.onrender.com wss://*.supabase.co;
+    connect-src ${connectSrc};
     frame-src 'self';
     object-src 'none';
     base-uri 'self';

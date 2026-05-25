@@ -5,7 +5,7 @@
  *
  * Thin client wrapper that decodes the subject + grade and renders
  * <SocraticChat />. Grade is read from the ?grade= query param first, then
- * from localStorage (set by /student/journey), then a sensible default.
+ * from sessionStorage (set by /student/journey), then a sensible default.
  *
  * No data fetching here — everything chat-related is in the SocraticChat
  * component which POSTs to /api/chat.
@@ -40,7 +40,7 @@ export default function StudentChatPage({ params }: PageProps) {
     if (queryGrade) {
       setGrade(queryGrade);
     } else if (typeof window !== 'undefined') {
-      const stored = window.localStorage.getItem(STORAGE_GRADE);
+      const stored = window.sessionStorage.getItem(STORAGE_GRADE);
       if (stored) setGrade(stored);
     }
 

@@ -3,20 +3,26 @@
 /**
  * /student/journey
  *
- * Two-step wizard that funnels a student into a chat session:
- *   Step 1: pick a Grade (from the CBC grade list).
- *   Step 2: pick a Subject (from the subjects valid for that grade).
+ * Three-step wizard that funnels a student into a chat session, mirroring the
+ * Kenyan CBC structure (2-6-3-3-3):
+ *   Step 1: pick a Level   (Pre-Primary / Lower / Upper Primary / Junior / Senior Secondary)
+ *   Step 2: pick a Grade   (the grades that fall under that level)
+ *   Step 3: pick a Subject (subjects valid for that grade)
  *
- * On subject click → persist {grade, subject} to localStorage and navigate to
+ * On subject click → persist {level, grade, subject} to sessionStorage and navigate to
  *   /student/chat/[subject]?grade=...
  *
- * Data source: studio/src/data/curriculum/index.ts (getAllGrades, getSubjectsForGrade).
- * No new curriculum constants live here.
+ * Persistence is sessionStorage (not localStorage) so the canvas reappears every
+ * fresh tab — important for shared devices and term-to-term progression.
+ *
+ * Curriculum data: studio/src/data/curriculum/index.ts (getAllGrades, getSubjectsForGrade).
+ * Grades present in the level mapping but not in getAllGrades() are rendered as
+ * "Coming soon" — honest about coverage rather than dumping empty subject grids.
  */
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight, GraduationCap, BookOpen, MessageCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, GraduationCap, BookOpen, MessageCircle, Layers, Gamepad2 } from 'lucide-react';
 import { StudentHeader } from '@/components/layout/student-header';
 import {
   Card,
@@ -29,31 +35,116 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { getAllGrades, getSubjectsForGrade } from '@/data/curriculum';
 
+const STORAGE_LEVEL = 'learningJourney.level';
 const STORAGE_GRADE = 'learningJourney.grade';
 const STORAGE_SUBJECT = 'learningJourney.subject';
 
+type LevelId =
+  | 'pre-primary'
+  | 'lower-primary'
+  | 'upper-primary'
+  | 'junior-secondary'
+  | 'senior-secondary';
+
+interface CbcLevel {
+  id: LevelId;
+  label: string;
+  ageRange: string;
+  description: string;
+  grades: string[];
+}
+
+// Source: KICD CBC structure (2-6-3-3-3). Verified against
+// https://eduguide.co.ke/cbc-curriculum-in-kenya/ and
+// https://www.aubsp.com/age-wise-education-system-in-kenya/.
+const CBC_LEVELS: readonly CbcLevel[] = [
+  {
+    id: 'pre-primary',
+    label: 'Pre-Primary',
+    ageRange: 'Ages 4–5',
+    description: 'Foundational play-based learning (PP1–PP2).',
+    grades: ['PP1', 'PP2'],
+  },
+  {
+    id: 'lower-primary',
+    label: 'Lower Primary',
+    ageRange: 'Ages 6–8',
+    description: 'Literacy, numeracy and environmental activities.',
+    grades: ['Grade 1', 'Grade 2', 'Grade 3'],
+  },
+  {
+    id: 'upper-primary',
+    label: 'Upper Primary',
+    ageRange: 'Ages 9–11',
+    description: 'Broader subjects building toward the KPSEA at Grade 6.',
+    grades: ['Grade 4', 'Grade 5', 'Grade 6'],
+  },
+  {
+    id: 'junior-secondary',
+    label: 'Junior Secondary',
+    ageRange: 'Ages 12–14',
+    description: 'Wide-based curriculum that helps you discover your strengths.',
+    grades: ['Grade 7', 'Grade 8', 'Grade 9'],
+  },
+  {
+    id: 'senior-secondary',
+    label: 'Senior Secondary',
+    ageRange: 'Ages 15–17',
+    description: 'Specialised pathways: STEM, Social Sciences, or Arts & Sports.',
+    grades: ['Grade 10', 'Grade 11', 'Grade 12'],
+  },
+];
+
+const LEVELS_BY_ID: Record<LevelId, CbcLevel> = CBC_LEVELS.reduce(
+  (acc, lvl) => ({ ...acc, [lvl.id]: lvl }),
+  {} as Record<LevelId, CbcLevel>
+);
+
+type Step = 'level' | 'grade' | 'subject';
+
 export default function JourneyPage() {
   const router = useRouter();
-  const [step, setStep] = useState<'grade' | 'subject'>('grade');
+  const [step, setStep] = useState<Step>('level');
+  const [level, setLevel] = useState<LevelId | null>(null);
   const [grade, setGrade] = useState<string | null>(null);
 
-  // Restore previous selection so a returning student sees a sensible default.
+  // Restore previous selection so a returning student sees a sensible default
+  // within the same tab session. sessionStorage clears on tab close.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const savedGrade = window.localStorage.getItem(STORAGE_GRADE);
-    if (savedGrade) setGrade(savedGrade);
+    const savedLevel = window.sessionStorage.getItem(STORAGE_LEVEL) as LevelId | null;
+    const savedGrade = window.sessionStorage.getItem(STORAGE_GRADE);
+    if (savedLevel && LEVELS_BY_ID[savedLevel]) {
+      setLevel(savedLevel);
+      if (savedGrade && LEVELS_BY_ID[savedLevel].grades.includes(savedGrade)) {
+        setGrade(savedGrade);
+      }
+    }
   }, []);
 
-  const grades = useMemo(() => getAllGrades(), []);
+  const coveredGrades = useMemo(() => new Set(getAllGrades()), []);
+
   const subjects = useMemo(
-    () => (grade ? getSubjectsForGrade(grade) : []),
-    [grade]
+    () => (grade && coveredGrades.has(grade) ? getSubjectsForGrade(grade) : []),
+    [grade, coveredGrades]
   );
 
+  const pickLevel = (id: LevelId) => {
+    setLevel(id);
+    setGrade(null);
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.setItem(STORAGE_LEVEL, id);
+      window.sessionStorage.removeItem(STORAGE_GRADE);
+      window.sessionStorage.removeItem(STORAGE_SUBJECT);
+    }
+    setStep('grade');
+  };
+
   const pickGrade = (g: string) => {
+    if (!coveredGrades.has(g)) return; // "Coming soon" — no-op
     setGrade(g);
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem(STORAGE_GRADE, g);
+      window.sessionStorage.setItem(STORAGE_GRADE, g);
     }
     setStep('subject');
   };
@@ -61,12 +152,14 @@ export default function JourneyPage() {
   const pickSubject = (subject: string) => {
     if (!grade) return;
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem(STORAGE_SUBJECT, subject);
+      window.sessionStorage.setItem(STORAGE_SUBJECT, subject);
     }
     router.push(
       `/student/chat/${encodeURIComponent(subject)}?grade=${encodeURIComponent(grade)}`
     );
   };
+
+  const currentLevel = level ? LEVELS_BY_ID[level] : null;
 
   return (
     <div className="min-h-screen bg-background">
@@ -81,61 +174,137 @@ export default function JourneyPage() {
             </span>
           </div>
           <h1 className="text-3xl md:text-4xl font-bold">
-            {step === 'grade' ? 'Choose your grade' : 'Choose a subject'}
+            {step === 'level' && 'Which level are you in?'}
+            {step === 'grade' && 'Which grade are you in?'}
+            {step === 'subject' && 'Choose a subject'}
           </h1>
           <p className="text-muted-foreground max-w-xl mx-auto">
-            {step === 'grade'
-              ? 'Mwalimu AI will tailor the conversation to your level.'
-              : `You're in ${grade}. Pick the subject you'd like to explore today.`}
+            {step === 'level' &&
+              'Tell Mwalimu AI your school level so the conversation matches your CBC syllabus.'}
+            {step === 'grade' && currentLevel &&
+              `${currentLevel.label} — ${currentLevel.description}`}
+            {step === 'subject' && grade &&
+              `You're in ${grade}. Pick the subject you'd like to explore today.`}
           </p>
         </div>
 
         {/* Step indicator */}
-        <div className="flex items-center justify-center gap-3 mb-8 text-sm">
+        <div className="flex items-center justify-center gap-2 md:gap-3 mb-8 text-sm flex-wrap">
+          <Badge
+            variant={step === 'level' ? 'default' : 'secondary'}
+            className="cursor-pointer"
+            onClick={() => setStep('level')}
+          >
+            1. Level{currentLevel ? ` · ${currentLevel.label}` : ''}
+          </Badge>
+          <span className="text-muted-foreground">→</span>
           <Badge
             variant={step === 'grade' ? 'default' : 'secondary'}
-            className="cursor-pointer"
-            onClick={() => setStep('grade')}
+            className={level ? 'cursor-pointer' : 'opacity-50'}
+            onClick={() => level && setStep('grade')}
           >
-            1. Grade {grade ? `· ${grade}` : ''}
+            2. Grade{grade ? ` · ${grade}` : ''}
           </Badge>
           <span className="text-muted-foreground">→</span>
           <Badge
             variant={step === 'subject' ? 'default' : 'secondary'}
-            className={grade ? 'cursor-pointer' : 'opacity-50'}
-            onClick={() => grade && setStep('subject')}
+            className={grade && coveredGrades.has(grade) ? 'cursor-pointer' : 'opacity-50'}
+            onClick={() => grade && coveredGrades.has(grade) && setStep('subject')}
           >
-            2. Subject
+            3. Subject
           </Badge>
         </div>
 
-        {step === 'grade' && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 gap-3">
-            {grades.map((g) => (
-              <Card
-                key={g}
-                role="button"
-                tabIndex={0}
-                onClick={() => pickGrade(g)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') pickGrade(g);
-                }}
-                className="cursor-pointer transition hover:border-primary hover:shadow-md"
-              >
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <GraduationCap className="h-5 w-5 text-primary" />
-                    {g}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    CBC level · {gradeBand(g)}
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
+        {step === 'level' && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {CBC_LEVELS.map((lvl) => {
+              const anyCovered = lvl.grades.some((g) => coveredGrades.has(g));
+              return (
+                <Card
+                  key={lvl.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => pickLevel(lvl.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') pickLevel(lvl.id);
+                  }}
+                  className="cursor-pointer transition hover:border-primary hover:shadow-md"
+                >
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <Layers className="h-5 w-5 text-primary" />
+                      {lvl.label}
+                      {!anyCovered && (
+                        <Badge variant="outline" className="ml-auto text-xs">
+                          Coming soon
+                        </Badge>
+                      )}
+                    </CardTitle>
+                    <CardDescription>{lvl.ageRange}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground">{lvl.description}</p>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
+        )}
+
+        {step === 'grade' && currentLevel && (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {currentLevel.grades.map((g) => {
+                const covered = coveredGrades.has(g);
+                return (
+                  <Card
+                    key={g}
+                    role="button"
+                    tabIndex={covered ? 0 : -1}
+                    aria-disabled={!covered}
+                    onClick={() => pickGrade(g)}
+                    onKeyDown={(e) => {
+                      if (covered && (e.key === 'Enter' || e.key === ' ')) pickGrade(g);
+                    }}
+                    className={
+                      covered
+                        ? 'cursor-pointer transition hover:border-primary hover:shadow-md'
+                        : 'cursor-not-allowed opacity-60'
+                    }
+                  >
+                    <CardHeader className="pb-2">
+                      <CardTitle className="flex items-center gap-2 text-lg">
+                        <GraduationCap className="h-5 w-5 text-primary" />
+                        {g}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {covered ? (
+                        <p className="text-sm text-muted-foreground">
+                          CBC level · {currentLevel.label}
+                        </p>
+                      ) : (
+                        <Badge variant="outline" className="text-xs">
+                          Coming soon
+                        </Badge>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+
+            <div className="mt-8 flex justify-center">
+              <Button
+                variant="ghost"
+                onClick={() => setStep('level')}
+                className="gap-2"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Change level
+              </Button>
+            </div>
+          </>
         )}
 
         {step === 'subject' && grade && (
@@ -169,6 +338,30 @@ export default function JourneyPage() {
               ))}
             </div>
 
+            {/* Sandbox Link */}
+            <div className="mt-6">
+              <Card className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 border-2 border-dashed border-purple-300 dark:border-purple-700">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Gamepad2 className="h-6 w-6 text-purple-600" />
+                    Interactive Learning Sandbox
+                  </CardTitle>
+                  <CardDescription>
+                    Practice with hands-on activities and games for {grade}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button
+                    onClick={() => router.push('/student/sandbox')}
+                    className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+                  >
+                    <Gamepad2 className="h-4 w-4 mr-2" />
+                    Enter Sandbox
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+
             <div className="mt-8 flex justify-center">
               <Button
                 variant="ghost"
@@ -184,12 +377,4 @@ export default function JourneyPage() {
       </main>
     </div>
   );
-}
-
-function gradeBand(grade: string): string {
-  const n = parseInt(grade.replace(/[^0-9]/g, ''), 10);
-  if (!Number.isFinite(n)) return 'Primary';
-  if (n <= 3) return 'Lower Primary';
-  if (n <= 6) return 'Upper Primary';
-  return 'Junior Secondary';
 }

@@ -9,8 +9,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Loader2, BookOpen, Download, Calendar } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { curriculumData } from '@/data/curriculum/curriculum-structure'
+import { getSubjectsForGrade } from '@/data/curriculum'
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/api-config'
+
+// CBC level → grade map. Kept in sync with the student-side journey wizard
+// (src/app/student/journey/page.tsx). Values are the display strings the
+// backend (LessonArchitectAgent) expects, so no transformation is needed
+// before posting.
+const CBC_LEVELS: { id: string; label: string; grades: string[] }[] = [
+  { id: 'lower-primary',    label: 'Lower Primary',    grades: ['Grade 1', 'Grade 2', 'Grade 3'] },
+  { id: 'upper-primary',    label: 'Upper Primary',    grades: ['Grade 4', 'Grade 5', 'Grade 6'] },
+  { id: 'junior-secondary', label: 'Junior Secondary', grades: ['Grade 7', 'Grade 8', 'Grade 9'] },
+]
 import SchemePreview from '@/components/scheme-wizard/scheme-preview'
 import LessonPlanDialog from '@/components/scheme-wizard/lesson-plan-dialog'
 import { UnpackedOutcomeRenderer } from './unpacked-outcome-renderer'
@@ -50,16 +60,13 @@ export function SchemeOfWorkGenerator() {
   const [subject, setSubject] = useState('')
   const [term, setTerm] = useState('Term 1')
 
-  // Get available levels
-  const levels = Object.keys(curriculumData)
-
-  // Get available grades for selected level
-  const grades = level ? Object.keys(curriculumData[level as keyof typeof curriculumData] || {}) : []
-
-  // Get available subjects for selected grade
-  const subjects = level && grade 
-    ? Object.keys(curriculumData[level as keyof typeof curriculumData]?.[grade as any] || {})
-    : []
+  // Dropdown options. Drive these from the static CBC_LEVELS map and the
+  // shared getSubjectsForGrade() helper — NOT from Object.keys(curriculumData),
+  // because curriculumData is a Proxy whose target is an empty object, so
+  // Object.keys() always returns []. See src/data/curriculum/curriculum-structure.ts.
+  const levels = CBC_LEVELS
+  const grades = level ? (CBC_LEVELS.find(l => l.id === level)?.grades ?? []) : []
+  const subjects = grade ? getSubjectsForGrade(grade) : []
 
   const generateScheme = async () => {
     if (!level || !grade || !subject || !term) {
@@ -77,10 +84,8 @@ export function SchemeOfWorkGenerator() {
     try {
       // The curated registry is optional context — generation falls through
       // to an LLM-scaffolded scheme if a grade/subject pair isn't registered.
-      const subjectData = curriculumData[level as keyof typeof curriculumData]?.[grade as any]?.[subject]
-      if (!subjectData) {
-        console.warn('No curated curriculum data for', grade, subject, '— backend will scaffold from scratch')
-      }
+      // We no longer pre-check it client-side; the backend logs missing pairs
+      // and scaffolds from scratch regardless.
 
       const teacherId = getTeacherId()
 
@@ -243,8 +248,8 @@ export function SchemeOfWorkGenerator() {
               </SelectTrigger>
               <SelectContent>
                 {levels.map(l => (
-                  <SelectItem key={l} value={l}>
-                    {l.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                  <SelectItem key={l.id} value={l.id}>
+                    {l.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -263,7 +268,7 @@ export function SchemeOfWorkGenerator() {
               <SelectContent>
                 {grades.map(g => (
                   <SelectItem key={g} value={g}>
-                    {g.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                    {g}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -279,7 +284,7 @@ export function SchemeOfWorkGenerator() {
               <SelectContent>
                 {subjects.map(s => (
                   <SelectItem key={s} value={s}>
-                    {s.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                    {s}
                   </SelectItem>
                 ))}
               </SelectContent>

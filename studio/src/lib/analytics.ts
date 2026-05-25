@@ -9,6 +9,8 @@
  * - Prevents query manipulation
  */
 
+import React from 'react';
+
 interface Event {
   name: string;
   properties?: Record<string, any>;
@@ -24,6 +26,26 @@ interface Event {
 function isValidUUID(uuid: string): boolean {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   return uuidRegex.test(uuid);
+}
+
+/**
+ * Validate a generic identifier (user, teacher, student, etc.)
+ *
+ * The earlier hardening only accepted UUID v4 here, which silently dropped
+ * every userId the app actually emits — Supabase profile IDs come through
+ * as strings like `user1`, teacher dashboards use `teacher_${random}`, and
+ * a few legacy chat call sites pass `teacher_001`. Strict UUID validation
+ * meant `trackEvent('lesson_completed', {...}, 'user1')` quietly stored a
+ * null userId, and `getEventsByUser('user1')` always returned [].
+ *
+ * Identifiers are not interpolated into queries (storage is JSON in
+ * localStorage), so the real risk is only oversized / control-char input.
+ * Allow alnum, dash, underscore, and dot; cap length.
+ */
+function isValidIdentifier(id: string): boolean {
+  if (typeof id !== 'string') return false;
+  if (id.length === 0 || id.length > 128) return false;
+  return /^[a-zA-Z0-9._-]+$/.test(id);
 }
 
 /**
@@ -121,8 +143,10 @@ export function trackEvent(
     // SECURITY: Sanitize event name
     const sanitizedName = sanitizeEventName(name);
     
-    // SECURITY: Validate userId if provided
-    if (userId && !isValidUUID(userId)) {
+    // SECURITY: Validate userId if provided. See isValidIdentifier — we
+    // accept the non-UUID id shapes the app actually uses (`user1`,
+    // `teacher_${random}`, etc.) instead of dropping them silently.
+    if (userId && !isValidIdentifier(userId)) {
       console.warn('Invalid userId provided to trackEvent');
       userId = undefined;
     }
@@ -231,8 +255,8 @@ export function getEventsByName(name: string): Event[] {
  * SECURITY: Validates userId format and authorization before querying
  */
 export function getEventsByUser(userId: string, currentUserId?: string): Event[] {
-  // SECURITY: Validate userId format
-  if (!isValidUUID(userId)) {
+  // SECURITY: Validate userId format (see isValidIdentifier for shape rules)
+  if (!isValidIdentifier(userId)) {
     console.warn('Invalid userId provided to getEventsByUser');
     return [];
   }
@@ -382,8 +406,5 @@ export function useAnalytics(currentUserId?: string) {
     getEventsByDateRange: (start: Date, end: Date) => getEventsByDateRange(start, end, currentUserId),
   };
 }
-
-// For non-React usage
-import React from 'react';
 
 // Made with Bob

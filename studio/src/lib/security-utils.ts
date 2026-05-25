@@ -265,9 +265,25 @@ class RateLimiter {
 // Global rate limiter instance
 export const rateLimiter = new RateLimiter();
 
-// Cleanup old records every 5 minutes
-if (typeof window !== 'undefined') {
-  setInterval(() => rateLimiter.cleanup(), 5 * 60 * 1000);
+// Schedule periodic cleanup so the in-memory Map doesn't grow unbounded.
+//
+// The earlier version gated this on `typeof window !== 'undefined'` — which
+// is exactly backwards: the rate limiter is consumed by /api/auth (a Node
+// route handler) where `window` is undefined, so cleanup never ran in the
+// place it actually mattered. On Render's free tier (512 MB), a long-lived
+// process could leak indefinitely. On the browser side, the limiter is
+// re-created per page load anyway, so cleanup buys little there.
+//
+// We run cleanup in BOTH environments and use `unref()` on Node so the
+// interval doesn't keep the process alive after shutdown signals.
+const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
+const cleanupHandle: ReturnType<typeof setInterval> = setInterval(
+  () => rateLimiter.cleanup(),
+  CLEANUP_INTERVAL_MS
+);
+// Node's Timeout has .unref(); browsers don't. Guard the call.
+if (typeof (cleanupHandle as { unref?: () => void }).unref === 'function') {
+  (cleanupHandle as { unref: () => void }).unref();
 }
 
 /**

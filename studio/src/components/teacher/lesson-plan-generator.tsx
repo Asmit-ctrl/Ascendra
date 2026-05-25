@@ -12,9 +12,17 @@ import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Loader2, FileText, Download, Copy, Check, Sparkles } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { curriculumData } from '@/data/curriculum/curriculum-structure'
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/api-config'
-import { getHardcodedStrands } from '@/data/curriculum'
+import { getHardcodedStrands, getSubjectsForGrade } from '@/data/curriculum'
+
+// CBC level → grade map. See scheme-of-work-generator.tsx for rationale —
+// we drive dropdowns from this static map instead of Object.keys(curriculumData),
+// which returns [] because curriculumData is a Proxy with an empty target.
+const CBC_LEVELS: { id: string; label: string; grades: string[] }[] = [
+  { id: 'lower-primary',    label: 'Lower Primary',    grades: ['Grade 1', 'Grade 2', 'Grade 3'] },
+  { id: 'upper-primary',    label: 'Upper Primary',    grades: ['Grade 4', 'Grade 5', 'Grade 6'] },
+  { id: 'junior-secondary', label: 'Junior Secondary', grades: ['Grade 7', 'Grade 8', 'Grade 9'] },
+]
 
 export function LessonPlanGenerator() {
   const { toast } = useToast()
@@ -34,19 +42,15 @@ export function LessonPlanGenerator() {
   const [specificFocus, setSpecificFocus] = useState('')
   const [differentiation, setDifferentiation] = useState<string[]>([])
 
-  // Get available options
-  const levels = Object.keys(curriculumData)
-  const grades = level ? Object.keys(curriculumData[level as keyof typeof curriculumData] || {}) : []
-  const subjects = level && grade 
-    ? Object.keys(curriculumData[level as keyof typeof curriculumData]?.[grade as any] || {})
-    : []
+  // Dropdown options (see CBC_LEVELS rationale above).
+  const levels = CBC_LEVELS
+  const grades = level ? (CBC_LEVELS.find(l => l.id === level)?.grades ?? []) : []
+  const subjects = grade ? getSubjectsForGrade(grade) : []
 
-  // Get strands for selected subject
+  // Strands come straight from the curated curriculum — grade/subject are
+  // already display strings now, so no transformation needed.
   const strands = level && grade && subject
-    ? getHardcodedStrands(
-        grade.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-        subject.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-      )
+    ? getHardcodedStrands(grade, subject)
     : null
 
   const strandNames = strands?.map(s => s.name) || []
@@ -313,8 +317,8 @@ After the lesson, reflect on:
                   </SelectTrigger>
                   <SelectContent>
                     {levels.map(l => (
-                      <SelectItem key={l} value={l}>
-                        {l.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                      <SelectItem key={l.id} value={l.id}>
+                        {l.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -336,7 +340,7 @@ After the lesson, reflect on:
                   <SelectContent>
                     {grades.map(g => (
                       <SelectItem key={g} value={g}>
-                        {g.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                        {g}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -357,7 +361,7 @@ After the lesson, reflect on:
                   <SelectContent>
                     {subjects.map(s => (
                       <SelectItem key={s} value={s}>
-                        {s.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                        {s}
                       </SelectItem>
                     ))}
                   </SelectContent>
