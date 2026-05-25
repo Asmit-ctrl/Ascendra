@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import "../styles/accessibility.css";
 import { ThemeProvider } from "@/components/theme-provider";
+import { AccessibilityPanel } from "@/components/accessibility/AccessibilityPanel";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -69,6 +71,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           {children}
+          <AccessibilityPanel />
         </ThemeProvider>
       </body>
     </html>
