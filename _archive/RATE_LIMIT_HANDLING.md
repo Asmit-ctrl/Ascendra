@@ -1,7 +1,9 @@
 # Rate Limit Handling Guide
 
 ## Overview
-
+##
+if we look at the current hybrid mwalmu AI under the chat interface, we need it to be more learner frinedly especially the call, the latency has to be near realistic, so how should we work around that because to be truly great in the edtech field, I have personally interacted with this synthesis tutor and it had fast latency and also in the deep learning AI, I could call ANdrew NG in there and it was quite fast, close to be a realistic call, embracing dustruption and shifting as I have given it the message, like one time we were discussing o why ML models are great I answered about crew AI and as he was answering, shifted to lang graph and it was near realistic to shift, so this is waht we need, also sine we are embracing character AI's mode of call, let it be better than it is, in terms of latency, understanding the learner, if a supabase thing is needed, then we can create it in the editor for it as long as we retain the $0 budget.
+##
 The Ascendra platform uses Groq API for AI generation (schemes, lesson plans, worksheets, etc.). Groq has rate limits on their free tier that can be reached during heavy usage.
 
 ## Rate Limits (Groq Free Tier)

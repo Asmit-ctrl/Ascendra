@@ -13,6 +13,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, AlertCircle, Download, FileText, Sparkles, CheckCircle2 } from 'lucide-react';
 import { exportSchemeToDocx, type SchemeRow } from '@/lib/export-docx';
 import { useToast } from '@/hooks/use-toast';
+import { FeedbackWidget } from '@/components/teacher/feedback-widget';
 
 // Column headers for CBC scheme of work
 const COLUMN_HEADERS_EN = [
@@ -122,15 +123,31 @@ export function PreviewStep() {
 
     setIsExporting(true);
 
+    // Show immediate feedback
+    toast({
+      title: 'Preparing Export',
+      description: 'Generating your DOCX file...',
+    });
+
     try {
-      await exportSchemeToDocx(
-        generatedScheme.rows as SchemeRow[],
-        selectedGrade || 'Unknown Grade',
-        selectedSubject || 'Unknown Subject',
-        selectedTerm || 'Unknown Term',
-        teacherInputs?.teacherName,
-        teacherInputs?.schoolName
-      );
+      // Use setTimeout to make export non-blocking
+      await new Promise<void>((resolve, reject) => {
+        setTimeout(async () => {
+          try {
+            await exportSchemeToDocx(
+              generatedScheme.rows as SchemeRow[],
+              selectedGrade || 'Unknown Grade',
+              selectedSubject || 'Unknown Subject',
+              selectedTerm || 'Unknown Term',
+              undefined,
+              undefined
+            );
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
+        }, 0);
+      });
 
       toast({
         title: 'Export Successful',
@@ -249,10 +266,22 @@ export function PreviewStep() {
           <Download className="mr-2 h-4 w-4" />
           Print / PDF
         </Button>
-        <Button onClick={handleGenerate} variant="ghost">
-          Regenerate
-        </Button>
       </div>
+
+      {/* Feedback Widget */}
+      {generatedScheme?.id && (
+        <FeedbackWidget
+          contentType="scheme"
+          contentId={generatedScheme.id}
+          context={{
+            grade: selectedGrade,
+            subject: selectedSubject,
+            term: selectedTerm,
+            strands: selectedStrands,
+          }}
+          className="border-t pt-4"
+        />
+      )}
 
       {/* Scheme preview */}
       <Card>
@@ -272,8 +301,8 @@ export function PreviewStep() {
             </div>
 
             {/* Table */}
-            <div className="w-full rounded-lg border">
-              <div className="overflow-x-auto">
+            <div className="w-full rounded-lg border overflow-hidden">
+              <div className="overflow-x-auto overflow-y-visible">
                 <table className="min-w-[1400px] w-full text-sm">
                   <thead>
                     <tr>
