@@ -49,6 +49,7 @@ import {
   clearHistory,
   type StoredChatMessage,
 } from '@/lib/socratic-history';
+import { tutorIntroMessage } from '@/lib/grade-greetings';
 import { useWebSpeech } from '@/hooks/use-web-speech';
 import { CallInterface } from '@/components/voice/call-interface';
 
@@ -116,14 +117,21 @@ function makeId(): string {
 function introMessage(opts: {
   studentName: string;
   subject: string;
+  grade?: string;
   teacherContext?: string;
 }): ChatMessage {
   return {
     id: 'intro',
     role: 'assistant',
-    content: opts.teacherContext
-      ? "Welcome, Explorer! Your teacher has charted a learning journey just for your class. What expedition shall we embark on today?"
-      : `Karibu, ${opts.studentName}! I'm Mwalimu, your Socratic mentor for ${opts.subject}. What part of ${opts.subject} would you like to explore today?`,
+    // Grade-aware: lower-primary learners ("Grade 2 Environmental, what
+    // should we learn today?") never see the word "Socratic"; older
+    // learners keep the Mwalimu / Socratic framing they're used to.
+    content: tutorIntroMessage({
+      studentName: opts.studentName,
+      subject: opts.subject,
+      grade: opts.grade,
+      teacherContext: opts.teacherContext,
+    }),
   };
 }
 
@@ -139,7 +147,7 @@ export function SocraticChat({
   // and is never written to storage — that way starting a real conversation
   // doesn't pollute history with greetings.
   const [messages, setMessages] = useState<ChatMessage[]>(() => [
-    introMessage({ studentName, subject, teacherContext }),
+    introMessage({ studentName, subject, grade, teacherContext }),
   ]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -204,10 +212,10 @@ export function SocraticChat({
         }))
       );
     } else {
-      setMessages([introMessage({ studentName, subject, teacherContext })]);
+      setMessages([introMessage({ studentName, subject, grade, teacherContext })]);
     }
     hydratedRef.current = true;
-  }, [studentId, subject, studentName, teacherContext]);
+  }, [studentId, subject, studentName, grade, teacherContext]);
 
   // ---- Persist on every committed change ----------------------------------
   // Skip the intro placeholder; only persist real turns.
@@ -274,11 +282,11 @@ export function SocraticChat({
   const newConversation = useCallback(() => {
     abortRef.current?.abort();
     clearHistory(studentId, subject);
-    setMessages([introMessage({ studentName, subject, teacherContext })]);
+    setMessages([introMessage({ studentName, subject, grade, teacherContext })]);
     setInput('');
     setError(null);
     setBusy(false);
-  }, [studentId, subject, studentName, teacherContext]);
+  }, [studentId, subject, studentName, grade, teacherContext]);
 
   const send = useCallback(
     async (rawText: string, source: 'voice' | 'text' = 'text'): Promise<string> => {

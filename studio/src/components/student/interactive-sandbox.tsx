@@ -43,6 +43,40 @@ import { buildApiUrl, API_ENDPOINTS } from '@/lib/api-config'
 
 export type SandboxActivityType = 'fractions' | 'counting'
 
+/**
+ * One question in a micro-assessment loop. The lesson advances through
+ * the list and is marked mastered once `masteryThreshold` are answered
+ * correctly (or the list is exhausted, whichever comes first).
+ */
+export interface SandboxVariation {
+  question: string
+  correctAnswerValue: number
+  correctAnswerLabel?: string
+}
+
+/**
+ * Per-variation result captured for the structured `onComplete` payload
+ * so parents (root page, deep route) can persist the right metric.
+ */
+export interface VariationAttempt {
+  index: number
+  question: string
+  studentAnswerValue: number
+  studentAnswerLabel: string
+  correct: boolean
+  durationMs: number
+}
+
+export interface SandboxCompletionResult {
+  /** True iff `masteryThreshold` variations were answered correctly. */
+  mastered: boolean
+  /** Number of correct variations (0..variations.length). */
+  score: number
+  /** Total elapsed ms from first variation start to completion. */
+  timeSpent: number
+  attempts: VariationAttempt[]
+}
+
 export interface TelemetryEvent {
   timestamp: number
   event_type:
@@ -89,7 +123,31 @@ interface InteractiveSandboxProps {
   /** Display label, e.g. "3/4" or "5". Not used for grading. */
   correctAnswerLabel?: string
   studentId?: string
-  onComplete?: (result: unknown) => void
+  /**
+   * Optional micro-assessment variations (Synthesis-style mastery
+   * gating). When provided, the first variation overrides
+   * `question`/`correctAnswerValue`/`correctAnswerLabel`; subsequent
+   * variations are advanced to on each correct submission.
+   *
+   * If omitted, the sandbox behaves as a single-shot question.
+   */
+  variations?: SandboxVariation[]
+  /**
+   * Number of correct variations needed to mark the lesson mastered.
+   * Defaults to `variations.length` (mastery requires all of them) but
+   * a smaller number (e.g. 2 of 3) gives the Synthesis behaviour where
+   * a consistent streak ends the lesson early.
+   */
+  masteryThreshold?: number
+  /**
+   * Stable id for the lesson session that spans variations. Each
+   * variation gets its OWN `session_id` (so the backend's
+   * `behavioral_profiles` upsert on `session_id` doesn't stomp the
+   * earlier variation's profile) but they all share this `lesson_id`
+   * in `activity_data` so the misconception pipeline can group them.
+   */
+  lessonId?: string
+  onComplete?: (result: SandboxCompletionResult) => void
 }
 
 // ---------------------------------------------------------------------------
@@ -144,8 +202,41 @@ export function InteractiveSandbox({
   correctAnswerValue,
   correctAnswerLabel,
   studentId,
+  variations,
+  masteryThreshold,
+  lessonId,
   onComplete,
 }: InteractiveSandboxProps) {
+  // ----- Variation / lesson state -----------------------------------------
+  //
+  // The lesson is a sequence of one or more `SandboxVariation`s. If the
+  // caller didn't pass `variations`, we synthesise a single-item list
+  // from the legacy single-question props so the rest of the component
+  // can treat both shapes uniformly.
+  const lessonVariations: SandboxVariation[] = useMemo(
+    () =>
+      variations && variations.length > 0
+        ? variations
+        : [{ question, correctAnswerValue, correctAnswerLabel }],
+    [variations, question, correctAnswerValue, correctAnswerLabel],
+  )
+  const masteryGoal = masteryThreshold ?? lessonVariations.length
+
+  const [variationIndex, setVariationIndex] = useState(0)
+  const [correctCount, setCorrectCount] = useState(0)
+  const attemptsRef = useRef<VariationAttempt[]>([])
+  const variationStartRef = useRef<number>(Date.now())
+  const lessonStartRef = useRef<number>(Date.now())
+  const stableLessonId = useMemo(
+    () => lessonId ?? `lesson_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    [lessonId],
+  )
+
+  const currentVariation = lessonVariations[variationIndex] ?? lessonVariations[0]
+  const activeCorrectAnswerValue = currentVariation.correctAnswerValue
+  const activeCorrectAnswerLabel = currentVariation.correctAnswerLabel
+  const activeQuestion = currentVariation.question
+
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [tokens, setTokens] = useState<DraggableToken[]>(() => makeInitialTokens(activityType))
   // Undo stack — full token snapshots before each constructive action.
@@ -153,7 +244,13 @@ export function InteractiveSandbox({
   // sandbox is small enough that memory doesn't matter.
   const undoStack = useRef<DraggableToken[][]>([])
   const events = useRef<TelemetryEvent[]>([])
-  const sessionId = useMemo(() => `sess_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, [])
+  // One session_id PER variation. The backend upserts on session_id in
+  // `behavioral_profiles`, so re-using a single id across variations
+  // would silently overwrite the earlier variation's profile. We tie
+  // variations together via `lesson_id` in `activity_data`.
+  const [sessionId, setSessionId] = useState(
+    () => `sess_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+  )
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
   // Drag state — held in a ref because we don't want to re-render on
@@ -393,6 +490,25 @@ export function InteractiveSandbox({
     setFeedback(null)
   }
 
+  /**
+   * Reset everything that's scoped to a single variation: token layout,
+   * undo stack, event buffer, drag/hover refs, and the session id. We
+   * deliberately roll a NEW session id here so the next variation's
+   * telemetry batch doesn't upsert-overwrite the previous one's
+   * behavioural profile in Supabase.
+   */
+  const resetForNextVariation = useCallback(() => {
+    setTokens(makeInitialTokens(activityType))
+    undoStack.current = []
+    events.current = []
+    setEventCount(0)
+    drag.current = { tokenId: null, offsetX: 0, offsetY: 0, startedAt: 0, pathPoints: 0 }
+    hover.current = { target: null, enteredAt: 0 }
+    setFeedback(null)
+    variationStartRef.current = Date.now()
+    setSessionId(`sess_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`)
+  }, [activityType])
+
   const handleSubmit = async () => {
     // Compute student's answer from tokens currently inside the drop zone.
     const droppedTokens = tokens.filter((t) => inDropZone(t))
@@ -407,13 +523,17 @@ export function InteractiveSandbox({
         student_answer_value: studentAnswerValue,
         student_answer_label: studentAnswerLabel,
         tokens_in_zone: droppedTokens.length,
+        variation_index: variationIndex,
+        lesson_id: stableLessonId,
       },
     })
+
+    const correct = Math.abs(studentAnswerValue - activeCorrectAnswerValue) < 1e-3
 
     setIsSubmitting(true)
     setFeedback(null)
     try {
-      const res = await fetch(buildApiUrl(API_ENDPOINTS.TELEMETRY_CAPTURE), {
+      await fetch(buildApiUrl(API_ENDPOINTS.TELEMETRY_CAPTURE), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -425,28 +545,68 @@ export function InteractiveSandbox({
           subject,
           events: events.current,
           activity_data: {
-            question,
-            correct_answer: correctAnswerLabel ?? String(correctAnswerValue),
-            correct_answer_value: correctAnswerValue,
+            lesson_id: stableLessonId,
+            variation_index: variationIndex,
+            variation_total: lessonVariations.length,
+            mastery_threshold: masteryGoal,
+            question: activeQuestion,
+            correct_answer: activeCorrectAnswerLabel ?? String(activeCorrectAnswerValue),
+            correct_answer_value: activeCorrectAnswerValue,
             student_answer: studentAnswerLabel,
             student_answer_value: studentAnswerValue,
+            is_correct: correct,
           },
         }),
       })
-      const data = await res.json().catch(() => ({}))
+
+      // Record the attempt for the structured onComplete payload.
+      attemptsRef.current.push({
+        index: variationIndex,
+        question: activeQuestion,
+        studentAnswerValue,
+        studentAnswerLabel,
+        correct,
+        durationMs: Date.now() - variationStartRef.current,
+      })
 
       // Quick local feedback. The richer "you have a misconception about
       // common-denominator addition" feedback comes from the backend
       // analysis pipeline — we surface it to the teacher dashboard,
       // not the student directly.
-      const correct = Math.abs(studentAnswerValue - correctAnswerValue) < 1e-3
-      setFeedback(
-        correct
-          ? `✅ Correct! ${studentAnswerLabel} = ${correctAnswerLabel ?? correctAnswerValue}`
-          : `🤔 You answered ${studentAnswerLabel} (${studentAnswerValue.toFixed(3)}). Try again.`,
-      )
+      const nextCorrectCount = correct ? correctCount + 1 : correctCount
+      const isLastVariation = variationIndex >= lessonVariations.length - 1
+      const reachedMastery = nextCorrectCount >= masteryGoal
+      const lessonComplete = reachedMastery || (correct && isLastVariation)
 
-      onComplete?.(data)
+      if (correct) {
+        setCorrectCount(nextCorrectCount)
+        if (lessonComplete) {
+          setFeedback(
+            reachedMastery
+              ? `🎉 Mastered! ${nextCorrectCount} of ${lessonVariations.length} correct.`
+              : `✅ Lesson complete: ${nextCorrectCount}/${lessonVariations.length}.`,
+          )
+          onComplete?.({
+            mastered: reachedMastery,
+            score: nextCorrectCount,
+            timeSpent: Date.now() - lessonStartRef.current,
+            attempts: [...attemptsRef.current],
+          })
+        } else {
+          // Advance to next variation; fresh session_id, fresh canvas.
+          setFeedback(
+            `✅ Correct! Next question (${variationIndex + 2} of ${lessonVariations.length})…`,
+          )
+          setVariationIndex((i) => i + 1)
+          // Defer the reset by a tick so the student sees the feedback
+          // briefly before the canvas wipes.
+          setTimeout(resetForNextVariation, 600)
+        }
+      } else {
+        setFeedback(
+          `🤔 You answered ${studentAnswerLabel} (${studentAnswerValue.toFixed(3)}). Try again.`,
+        )
+      }
     } catch (err) {
       console.error('Telemetry submit failed:', err)
       setFeedback('Could not reach the tutor — your work is saved locally.')
@@ -462,12 +622,18 @@ export function InteractiveSandbox({
       <CardHeader>
         <div className="flex items-center justify-between gap-2">
           <div>
-            <CardTitle className="text-lg">{question}</CardTitle>
+            <CardTitle className="text-lg">{activeQuestion}</CardTitle>
             <p className="text-sm text-muted-foreground mt-1">
               {grade} • {subject} • {competency}
             </p>
           </div>
           <div className="flex flex-col items-end gap-1">
+            {lessonVariations.length > 1 && (
+              <Badge variant="secondary" className="gap-1">
+                Question {variationIndex + 1} of {lessonVariations.length}
+                {' '}• {correctCount}/{masteryGoal} mastered
+              </Badge>
+            )}
             <Badge variant="outline" className="gap-1">
               <Sparkles className="h-3 w-3" />
               {eventCount} signals

@@ -21,7 +21,17 @@ export const grade2MathActivities: Activity[] = [
     estimatedTime: 10,
     icon: '🌻',
     color: 'bg-green-500',
-    tags: ['counting', 'numbers', 'visual']
+    tags: ['counting', 'numbers', 'visual'],
+    // Canvas micro-assessment — drag exactly N flowers into the garden.
+    // Token supply in `makeCountingTokens` is 10, so all targets must be 1..10.
+    manipulative: 'tokens',
+    competency: 'MATH.G2.NUMBERS.COUNT',
+    masteryThreshold: 2,
+    variations: [
+      { question: 'Plant exactly 5 flowers in the garden.', targetValue: 5, targetLabel: '5' },
+      { question: 'Plant exactly 7 flowers in the garden.', targetValue: 7, targetLabel: '7' },
+      { question: 'Plant exactly 9 flowers in the garden.', targetValue: 9, targetLabel: '9' },
+    ],
   },
   {
     id: 'g2-math-shape-builder-1',
@@ -59,7 +69,17 @@ export const grade2MathActivities: Activity[] = [
     estimatedTime: 15,
     icon: '➕',
     color: 'bg-purple-500',
-    tags: ['addition', 'word-problems', 'animals']
+    tags: ['addition', 'word-problems', 'animals'],
+    // Drag the TOTAL number of tokens into the answer box. Tokens are
+    // worth 1 each, so dropping 7 tokens grades 3 + 4 correctly.
+    manipulative: 'tokens',
+    competency: 'MATH.G2.OPERATIONS.ADD',
+    masteryThreshold: 2,
+    variations: [
+      { question: 'Three monkeys join four monkeys. Drop the total.', targetValue: 7, targetLabel: '7' },
+      { question: 'Two zebras meet six zebras. Drop the total.', targetValue: 8, targetLabel: '8' },
+      { question: 'Five lions and four lions. Drop the total.', targetValue: 9, targetLabel: '9' },
+    ],
   },
   {
     id: 'g2-math-subtraction-safari-1',
@@ -78,7 +98,17 @@ export const grade2MathActivities: Activity[] = [
     estimatedTime: 15,
     icon: '➖',
     color: 'bg-orange-500',
-    tags: ['subtraction', 'word-problems', 'safari']
+    tags: ['subtraction', 'word-problems', 'safari'],
+    // Drop the REMAINING tokens after the subtraction. Same single-zone
+    // token paradigm — value 1 per token.
+    manipulative: 'tokens',
+    competency: 'MATH.G2.OPERATIONS.SUBTRACT',
+    masteryThreshold: 2,
+    variations: [
+      { question: 'Eight giraffes, three walk away. Drop how many remain.', targetValue: 5, targetLabel: '5' },
+      { question: 'Nine elephants, two leave the river. Drop how many remain.', targetValue: 7, targetLabel: '7' },
+      { question: 'Ten antelope, four hide. Drop how many remain.', targetValue: 6, targetLabel: '6' },
+    ],
   },
   {
     id: 'g2-math-place-value-palace-1',

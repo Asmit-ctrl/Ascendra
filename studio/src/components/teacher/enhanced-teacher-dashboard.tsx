@@ -12,7 +12,7 @@ import {
 
 // Import sub-components
 import { SchemeOfWorkGenerator } from './scheme-of-work-generator'
-import { LessonPlanFromScheme } from './lesson-plan-from-scheme'
+import { LessonPlanFromSchemeEnhanced } from './lesson-plan-from-scheme-enhanced'
 import { AssessmentGenerator } from './assessment-generator'
 import { StudentMonitoring } from './student-monitoring'
 import { InterventionCenter } from './intervention-center'
@@ -99,7 +99,7 @@ export function EnhancedTeacherDashboard() {
 
         {/* Lesson Plans Tab */}
         <TabsContent value="lesson-plans">
-          <LessonPlanFromScheme />
+          <LessonPlanFromSchemeEnhanced />
         </TabsContent>
 
         {/* Assessments Tab */}

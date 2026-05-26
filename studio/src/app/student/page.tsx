@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { StudentHeader } from '@/components/layout/student-header';
 import { GamificationPanel } from '@/components/student/gamification-panel';
+import { tutorTaglineFor } from '@/lib/grade-greetings';
 import type { GamificationMode } from '@/components/student/gamification-panel';
 import {
   GamificationModeSwitcher,
@@ -439,7 +440,7 @@ export default function StudentDashboardPage() {
                     Mwalimu AI Tutor
                   </CardTitle>
                   <CardDescription>
-                    Live Socratic tutor grounded in CBC curriculum
+                    {tutorTaglineFor(profile?.grade)}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-2">

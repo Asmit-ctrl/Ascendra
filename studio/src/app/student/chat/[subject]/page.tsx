@@ -16,6 +16,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { StudentHeader } from '@/components/layout/student-header';
 import { SocraticChat } from '@/components/student/socratic-chat';
 import { getStudentId } from '@/lib/auth/student-id';
+import { tutorLabelFor } from '@/lib/grade-greetings';
 
 const STORAGE_GRADE = 'learningJourney.grade';
 const DEFAULT_GRADE = 'Grade 4';
@@ -62,7 +63,7 @@ export default function StudentChatPage({ params }: PageProps) {
         <div className="mb-4">
           <h1 className="text-2xl font-bold">Mwalimu AI · {subject}</h1>
           <p className="text-sm text-muted-foreground">
-            {grade} · Socratic Mentor · grounded in Kenyan CBC
+            {grade} · {tutorLabelFor(grade)}
           </p>
         </div>
 

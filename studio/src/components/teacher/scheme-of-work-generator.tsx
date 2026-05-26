@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -11,6 +11,8 @@ import { Loader2, BookOpen, Download, Calendar } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { getSubjectsForGrade } from '@/data/curriculum'
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/api-config'
+import { fetchWithRetry } from '@/lib/network-utils'
+import { debounce } from '@/lib/performance-utils'
 
 // CBC level → grade map. Kept in sync with the student-side journey wizard
 // (src/app/student/journey/page.tsx). Values are the display strings the
@@ -68,7 +70,7 @@ export function SchemeOfWorkGenerator() {
   const grades = level ? (CBC_LEVELS.find(l => l.id === level)?.grades ?? []) : []
   const subjects = grade ? getSubjectsForGrade(grade) : []
 
-  const generateScheme = async () => {
+  const generateScheme = useCallback(async () => {
     if (!level || !grade || !subject || !term) {
       toast({
         title: 'Missing Information',
@@ -80,21 +82,13 @@ export function SchemeOfWorkGenerator() {
 
     setLoading(true)
     setSchemeRows([])
+    setCurrentSchemeId(null)
 
     try {
-      // The curated registry is optional context — generation falls through
-      // to an LLM-scaffolded scheme if a grade/subject pair isn't registered.
-      // We no longer pre-check it client-side; the backend logs missing pairs
-      // and scaffolds from scratch regardless.
-
       const teacherId = getTeacherId()
 
-      // Call the structured Python endpoint that returns SchemeRow[] JSON.
-      // The previous code routed through /agents/chat, which asked the LLM
-      // for a markdown blob — that's what produced the prose dump in
-      // savy.png. The new endpoint runs the LessonArchitectAgent with KSA
-      // guardrails and emits the 10-column CBC row shape directly.
-      const response = await fetch(
+      // Use fetchWithRetry to handle network errors
+      const response = await fetchWithRetry(
         buildApiUrl(API_ENDPOINTS.LESSON_ARCHITECT_GENERATE_SCHEME),
         {
           method: 'POST',
@@ -107,6 +101,15 @@ export function SchemeOfWorkGenerator() {
             mode: 'standard',
             language: 'english',
           }),
+          maxRetries: 3,
+          retryDelay: 2000,
+          timeout: 60000, // 60 second timeout for generation
+          onRetry: (attempt, error) => {
+            toast({
+              title: `Retrying... (Attempt ${attempt}/3)`,
+              description: 'Network issue detected. Retrying request...',
+            })
+          }
         }
       )
 
@@ -127,7 +130,16 @@ export function SchemeOfWorkGenerator() {
 
       toast({
         title: 'Scheme of Work Generated & Saved!',
-        description: `${rows.length}-lesson CBC scheme saved. Go to "Lesson Plans from Scheme" tab to create lesson plans.`,
+        description: `${rows.length}-lesson CBC scheme saved to your dashboard. Switch to "Lesson Plans from Scheme" tab to create lesson plans.`,
+      })
+
+      // Log success for debugging
+      console.log('Scheme saved successfully:', {
+        scheme_id: data.scheme_id,
+        rows: rows.length,
+        grade,
+        subject,
+        term
       })
     } catch (error) {
       console.error('Generation error:', error)
@@ -152,7 +164,13 @@ export function SchemeOfWorkGenerator() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [level, grade, subject, term, toast])
+
+  // Debounced version to prevent double-clicks
+  const debouncedGenerateScheme = useCallback(
+    debounce(generateScheme, 500),
+    [generateScheme]
+  )
 
   const downloadAsJson = () => {
     const blob = new Blob([JSON.stringify(schemeRows, null, 2)], {
@@ -307,7 +325,7 @@ export function SchemeOfWorkGenerator() {
 
           <div className="pt-4 space-y-3">
             <Button
-              onClick={generateScheme}
+              onClick={debouncedGenerateScheme}
               disabled={loading || !level || !grade || !subject}
               className="w-full"
               size="lg"
