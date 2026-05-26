@@ -32,22 +32,42 @@ export default function GenericActivity({ activity, onComplete, onBack }: Generi
   const [startTime] = useState(Date.now());
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
 
-  // Generate questions based on activity type and learning objectives
-  const questions = generateQuestionsFromActivity(activity);
+  // Generate questions based on activity type and learning objectives.
+  // useState so the Fisher-Yates shuffle runs once per mount — re-shuffling on
+  // every render would move the correct answer mid-question.
+  const [questions] = useState(() => generateQuestionsFromActivity(activity));
   const totalQuestions = questions.length;
   const progress = ((currentQuestion + 1) / totalQuestions) * 100;
+
+  // Fisher-Yates. Returns a new array; does not mutate the input.
+  function shuffle<T>(input: T[]): T[] {
+    const arr = input.slice();
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
 
   function generateQuestionsFromActivity(activity: Activity) {
     // This function generates appropriate questions based on the activity metadata
     const questions: any[] = [];
-    
+
     // Use learning objectives to create questions
     activity.learningObjectives.forEach((objective, index) => {
+      // Option generators always emit the correct answer at index 0; we shuffle
+      // here and record where it landed so the UI can't be brute-forced by
+      // always pressing the first button.
+      const rawOptions = generateOptionsForObjective(objective, activity);
+      const correctOption = rawOptions[0];
+      const shuffledOptions = shuffle(rawOptions);
+      const correctAnswer = shuffledOptions.indexOf(correctOption);
+
       questions.push({
         id: `q${index + 1}`,
         question: generateQuestionFromObjective(objective, activity),
-        options: generateOptionsForObjective(objective, activity),
-        correctAnswer: 0, // First option is always correct (we shuffle in UI)
+        options: shuffledOptions,
+        correctAnswer,
         hint: generateHintFromObjective(objective),
         explanation: `Great! ${objective}`,
       });
