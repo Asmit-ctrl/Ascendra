@@ -135,26 +135,33 @@
 
 /* Always-visible scrollbar for scheme table - horizontal scroll */
 .scheme-table-scroll::-webkit-scrollbar {
-  height: 8px;
+  height: 12px;
+  width: 12px;
 }
 
 .scheme-table-scroll::-webkit-scrollbar-track {
   background: hsl(var(--muted));
-  border-radius: 4px;
+  border-radius: 6px;
+  margin: 2px;
 }
 
 .scheme-table-scroll::-webkit-scrollbar-thumb {
-  background: hsl(var(--border));
-  border-radius: 4px;
+  background: hsl(var(--primary) / 0.6);
+  border-radius: 6px;
+  border: 2px solid hsl(var(--muted));
 }
 
 .scheme-table-scroll::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground));
+  background: hsl(var(--primary) / 0.8);
+}
+
+.scheme-table-scroll::-webkit-scrollbar-corner {
+  background: hsl(var(--muted));
 }
 
 .scheme-table-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: hsl(var(--border)) hsl(var(--muted));
+  scrollbar-width: auto;
+  scrollbar-color: hsl(var(--primary) / 0.6) hsl(var(--muted));
 }
 
 /* Mobile-specific: Always show scrollbar */

@@ -1,6 +1,8 @@
 // Activity definitions for different grades and subjects
 
 import { Activity, GradeId, SubjectId } from './sandbox-types';
+import { getCurriculumActivities, CurriculumActivity } from './curriculum-activities-mapper';
+import { getAvailableTerms, getCurrentTerm } from './term-utils';
 
 // Grade 2 Mathematics Activities
 export const grade2MathActivities: Activity[] = [
@@ -718,10 +720,36 @@ export const activityRegistry: Record<string, Activity[]> = {
   // Add more grades as we build them
 };
 
-// Helper function to get activities for a grade and subject
-export function getActivitiesForGradeSubject(grade: GradeId, subject: SubjectId): Activity[] {
+// Helper function to get activities for a grade and subject with term filtering
+export function getActivitiesForGradeSubject(
+  grade: GradeId,
+  subject: SubjectId,
+  filterByTerm: boolean = true
+): Activity[] {
   const key = `${grade}-${subject}`;
-  return activityRegistry[key] || [];
+  let activities = activityRegistry[key] || [];
+  
+  // For Grade 2, merge with curriculum-based activities
+  if (grade === 'g2' && ['english', 'kiswahili', 'mathematics'].includes(subject)) {
+    const curriculumActivities = getCurriculumActivities(subject);
+    // Merge, preferring curriculum activities
+    const curriculumIds = new Set(curriculumActivities.map(a => a.id));
+    const legacyActivities = activities.filter(a => !curriculumIds.has(a.id));
+    activities = [...curriculumActivities, ...legacyActivities];
+  }
+  
+  // Filter by available terms if requested
+  if (filterByTerm) {
+    const availableTerms = getAvailableTerms();
+    activities = activities.filter(activity => {
+      // If no term specified, include it (legacy activities)
+      if (!activity.term) return true;
+      // Otherwise check if term is available
+      return availableTerms.includes(activity.term as 1 | 2 | 3);
+    });
+  }
+  
+  return activities;
 }
 
 // Helper function to get activity by ID
@@ -739,7 +767,7 @@ export function getRecommendedActivities(
   subject: SubjectId,
   completedActivityIds: string[]
 ): Activity[] {
-  const allActivities = getActivitiesForGradeSubject(grade, subject);
+  const allActivities = getActivitiesForGradeSubject(grade, subject, true); // Filter by term
   
   // Filter activities where all prerequisites are completed
   const available = allActivities.filter(activity => {
@@ -747,11 +775,64 @@ export function getRecommendedActivities(
     return activity.prerequisites.every(prereq => completedActivityIds.includes(prereq));
   });
   
-  // Sort by difficulty and priority
+  // Sort by term first, then difficulty and priority
   return available.sort((a, b) => {
+    // Prioritize current term activities
+    const currentTerm = getCurrentTerm();
+    const aIsCurrentTerm = a.term === currentTerm;
+    const bIsCurrentTerm = b.term === currentTerm;
+    
+    if (aIsCurrentTerm && !bIsCurrentTerm) return -1;
+    if (!aIsCurrentTerm && bIsCurrentTerm) return 1;
+    
+    // Then by term (earlier terms first)
+    if (a.term && b.term && a.term !== b.term) return a.term - b.term;
+    
+    // Then by difficulty
     if (a.difficulty !== b.difficulty) return a.difficulty - b.difficulty;
+    
+    // Finally by estimated time
     return a.estimatedTime - b.estimatedTime;
   }).slice(0, 3); // Return top 3 recommendations
+}
+
+// Helper function to get activities by term
+export function getActivitiesByTerm(
+  grade: GradeId,
+  subject: SubjectId,
+  term: number
+): Activity[] {
+  const allActivities = getActivitiesForGradeSubject(grade, subject, false); // Don't filter
+  return allActivities.filter(activity => activity.term === term);
+}
+
+// Helper function to get term statistics
+export function getTermStatistics(
+  grade: GradeId,
+  subject: SubjectId
+): { term: number; count: number; completed: number }[] {
+  const allActivities = getActivitiesForGradeSubject(grade, subject, false);
+  const stats = new Map<number, { count: number; completed: number }>();
+  
+  // Initialize for terms 1, 2, 3
+  [1, 2, 3].forEach(term => {
+    stats.set(term, { count: 0, completed: 0 });
+  });
+  
+  // Count activities per term
+  allActivities.forEach(activity => {
+    const term = activity.term || 1; // Default to term 1 for legacy activities
+    const stat = stats.get(term);
+    if (stat) {
+      stat.count++;
+    }
+  });
+  
+  return Array.from(stats.entries()).map(([term, data]) => ({
+    term,
+    count: data.count,
+    completed: data.completed
+  }));
 }
 
 // Made with Bob

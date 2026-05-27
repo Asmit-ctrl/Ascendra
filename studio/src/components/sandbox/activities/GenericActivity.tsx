@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Activity } from '@/lib/sandbox-types';
+import { CurriculumActivity } from '@/lib/curriculum-activities-mapper';
 import { Sparkles, Trophy, ArrowRight, Lightbulb, CheckCircle } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { submitActivity } from '@/lib/sandbox-submission';
@@ -50,7 +51,26 @@ export default function GenericActivity({ activity, onComplete, onBack }: Generi
   }
 
   function generateQuestionsFromActivity(activity: Activity) {
-    // This function generates appropriate questions based on the activity metadata
+    // Check if this is a curriculum activity with pre-generated questions
+    const curriculumActivity = activity as CurriculumActivity;
+    if (curriculumActivity.questions && curriculumActivity.questions.length > 0) {
+      // Use curriculum-generated questions
+      return curriculumActivity.questions.map((q, index) => {
+        const shuffledOptions = shuffle(q.options);
+        const correctAnswer = shuffledOptions.indexOf(q.options[q.correctAnswer]);
+        
+        return {
+          id: `q${index + 1}`,
+          question: q.question,
+          options: shuffledOptions,
+          correctAnswer,
+          hint: q.hint,
+          explanation: `Excellent! You got it right!`,
+        };
+      });
+    }
+    
+    // Fallback: generate questions from learning objectives (legacy activities)
     const questions: any[] = [];
 
     // Use learning objectives to create questions
@@ -231,12 +251,17 @@ export default function GenericActivity({ activity, onComplete, onBack }: Generi
     // Submit to Supabase
     if (user?.id) {
       try {
+        // Map numeric difficulty to string
+        const difficultyLevel: 'easy' | 'medium' | 'hard' =
+          activity.difficulty <= 2 ? 'easy' :
+          activity.difficulty <= 4 ? 'medium' : 'hard';
+        
         await submitActivity({
           student_id: user.id,
           activity_type: activity.type,
           grade: activity.grade,
           subject: activity.subject,
-          difficulty: activity.difficulty,
+          difficulty: difficultyLevel,
           score: finalScore,
           time_spent: timeSpent,
           answers: { attempts, hintsUsed, totalQuestions },

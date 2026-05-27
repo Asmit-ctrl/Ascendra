@@ -385,7 +385,7 @@ export function SchemeOfWorkGenerator() {
               <p className="text-sm text-muted-foreground">This may take 30-60 seconds</p>
             </div>
           ) : schemeRows.length > 0 ? (
-            <ScrollArea className="h-[600px]">
+            <div className="h-[600px] overflow-auto">
               <SchemePreview
                 rows={schemeRows}
                 subject={subject}
@@ -393,7 +393,7 @@ export function SchemeOfWorkGenerator() {
                 term={term}
                 onGenerateLessonPlan={(row) => setLessonPlanRow(row)}
               />
-            </ScrollArea>
+            </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-12 space-y-4 text-center">
               <Calendar className="h-16 w-16 text-muted-foreground" />

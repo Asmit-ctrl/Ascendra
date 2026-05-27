@@ -76,6 +76,10 @@ export interface Activity {
   learningObjectives: string[]
   estimatedTime: number
 
+  // ---- Term-based filtering ---------------------------------------------
+  /** Academic term when this content should be available (1, 2, or 3) */
+  term?: number
+
   // ---- Optional: canvas + micro-assessment ------------------------------
   // Set these to opt an activity into `InteractiveSandbox`. When absent,
   // the activity renders as a generic worksheet.

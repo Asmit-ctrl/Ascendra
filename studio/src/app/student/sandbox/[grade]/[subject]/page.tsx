@@ -6,10 +6,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { StudentHeader } from '@/components/layout/student-header';
-import { ArrowLeft, Clock, Target, Trophy, Star, Lock } from 'lucide-react';
-import { getActivitiesForGradeSubject, getRecommendedActivities } from '@/lib/sandbox-activities';
+import { ArrowLeft, Clock, Target, Trophy, Star, Lock, Calendar, AlertTriangle, Info } from 'lucide-react';
+import { getActivitiesForGradeSubject, getRecommendedActivities, getTermStatistics } from '@/lib/sandbox-activities';
 import { Activity, GradeId, SubjectId } from '@/lib/sandbox-types';
+import { getCurrentTerm, getTermName, formatTermInfo, getDateWarningMessage, isDeviceDateReasonable } from '@/lib/term-utils';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 
@@ -24,10 +26,19 @@ export default function SandboxPage() {
   const [recommendedActivities, setRecommendedActivities] = useState<Activity[]>([]);
   const [totalPoints, setTotalPoints] = useState(0);
   const [currentStreak, setCurrentStreak] = useState(0);
+  const [currentTerm, setCurrentTerm] = useState<number>(1);
+  const [dateWarning, setDateWarning] = useState<string | null>(null);
 
   useEffect(() => {
-    // Load activities for this grade and subject
-    const allActivities = getActivitiesForGradeSubject(grade, subject);
+    // Check device date and get current term
+    const term = getCurrentTerm();
+    setCurrentTerm(term);
+    
+    const warning = getDateWarningMessage();
+    setDateWarning(warning);
+    
+    // Load activities for this grade and subject (with term filtering)
+    const allActivities = getActivitiesForGradeSubject(grade, subject, true);
     setActivities(allActivities);
 
     // Load student progress from localStorage (in production, use Firebase)
@@ -79,6 +90,26 @@ export default function SandboxPage() {
       <StudentHeader showBackButton onBack={handleBack} />
       
       <div className="container mx-auto px-4 py-8 max-w-7xl">
+        {/* Date Warning Alert */}
+        {dateWarning && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Device Date Issue</AlertTitle>
+            <AlertDescription>{dateWarning}</AlertDescription>
+          </Alert>
+        )}
+
+        {/* Term Information Alert */}
+        <Alert className="mb-6 bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
+          <Calendar className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          <AlertTitle className="text-blue-900 dark:text-blue-100">
+            Current Term: {getTermName(currentTerm as 1 | 2 | 3)}
+          </AlertTitle>
+          <AlertDescription className="text-blue-800 dark:text-blue-200">
+            {formatTermInfo(currentTerm as 1 | 2 | 3)} • You're seeing content available up to this term
+          </AlertDescription>
+        </Alert>
+
         {/* Header Section */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
@@ -164,16 +195,21 @@ export default function SandboxPage() {
           </div>
         )}
 
-        {/* All Activities by Type */}
+        {/* All Activities by Type and Term */}
         {['explore', 'practice', 'challenge', 'create'].map((type) => {
           const typeActivities = activities.filter(a => a.type === type);
           if (typeActivities.length === 0) return null;
 
           return (
             <div key={type} className="mb-8">
-              <h2 className="text-2xl font-bold mb-4 capitalize">
-                {activityTypeLabels[type as keyof typeof activityTypeLabels]} Activities
-              </h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-bold capitalize">
+                  {activityTypeLabels[type as keyof typeof activityTypeLabels]} Activities
+                </h2>
+                <Badge variant="outline" className="text-sm">
+                  {typeActivities.length} {typeActivities.length === 1 ? 'activity' : 'activities'}
+                </Badge>
+              </div>
               <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {typeActivities.map((activity) => {
                   const isLocked = isActivityLocked(activity);
@@ -193,9 +229,18 @@ export default function SandboxPage() {
                       )}>
                         <CardHeader>
                           <div className="flex items-start justify-between">
-                            <div className="text-4xl mb-2">{activity.icon}</div>
-                            {isLocked && <Lock className="w-5 h-5 text-gray-400" />}
-                            {isCompleted && <Star className="w-5 h-5 text-green-500 fill-green-500" />}
+                            <div className="flex items-center gap-2">
+                              <div className="text-4xl mb-2">{activity.icon}</div>
+                              {activity.term && (
+                                <Badge variant="secondary" className="text-xs">
+                                  T{activity.term}
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="flex gap-1">
+                              {isLocked && <Lock className="w-5 h-5 text-gray-400" />}
+                              {isCompleted && <Star className="w-5 h-5 text-green-500 fill-green-500" />}
+                            </div>
                           </div>
                           <CardTitle className="text-lg">{activity.title}</CardTitle>
                           <CardDescription className="line-clamp-2">

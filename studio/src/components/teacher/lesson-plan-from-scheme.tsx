@@ -215,13 +215,15 @@ export function LessonPlanFromScheme() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <SchemePreview
-              rows={selectedScheme.rows}
-              subject={selectedScheme.subject}
-              grade={selectedScheme.grade}
-              term={selectedScheme.term}
-              onGenerateLessonPlan={handleGenerateLessonPlan}
-            />
+            <div className="h-[600px] overflow-auto">
+              <SchemePreview
+                rows={selectedScheme.rows}
+                subject={selectedScheme.subject}
+                grade={selectedScheme.grade}
+                term={selectedScheme.term}
+                onGenerateLessonPlan={handleGenerateLessonPlan}
+              />
+            </div>
           </CardContent>
         </Card>
 
@@ -289,7 +291,7 @@ export function LessonPlanFromScheme() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="h-[600px]">
+          <div className="h-[600px] overflow-auto">
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {schemes.map((scheme) => (
                 <Card
@@ -328,7 +330,7 @@ export function LessonPlanFromScheme() {
                 </Card>
               ))}
             </div>
-          </ScrollArea>
+          </div>
         </CardContent>
       </Card>
     </div>
