@@ -135,10 +135,19 @@ export default function GenericActivity({ activity, onComplete, onBack }: Generi
         return `What do we wear when it rains?`;
       }
     } else if (subject === 'cre') {
-      if (objective.includes('creation')) {
+      const obj = objective.toLowerCase();
+      if (obj.includes('creation') || obj.includes('created')) {
         return `What did God create on the first day?`;
-      } else if (objective.includes('prayer')) {
+      } else if (obj.includes('identify things')) {
+        return `Which of these did God create?`;
+      } else if (obj.includes('appreciate')) {
+        return `How can we appreciate God's creation?`;
+      } else if (obj.includes('prayer')) {
         return `When should we pray?`;
+      } else if (obj.includes('good deed') || obj.includes('kindness')) {
+        return `Which of these is a good deed?`;
+      } else if (obj.includes('bible') || obj.includes('hero')) {
+        return `Who is a hero from the Bible?`;
       }
     } else if (subject === 'creative') {
       if (objective.includes('shape')) {
@@ -189,15 +198,25 @@ export default function GenericActivity({ activity, onComplete, onBack }: Generi
         return ['Apple', 'Stone', 'Paper', 'Stick'];
       }
     } else if (subject === 'cre') {
-      if (objective.includes('creation')) {
+      const obj = objective.toLowerCase();
+      if (obj.includes('creation')) {
         return ['Light', 'Animals', 'Plants', 'People'];
-      } else if (objective.includes('prayer')) {
+      } else if (obj.includes('identify things') || obj.includes('created')) {
+        return ['Sun', 'Cars', 'Phones', 'Houses'];
+      } else if (obj.includes('appreciate')) {
+        return ['Care for nature', 'Waste water', 'Litter', 'Cut trees'];
+      } else if (obj.includes('prayer')) {
         return ['Anytime', 'Never', 'Only Sunday', 'Only morning'];
+      } else if (obj.includes('good deed') || obj.includes('kindness') || obj.includes('help')) {
+        return ['Helping a friend', 'Lying', 'Stealing', 'Shouting'];
+      } else if (obj.includes('bible') || obj.includes('hero') || obj.includes('character')) {
+        return ['Moses', 'A teacher', 'A doctor', 'A driver'];
       }
     }
     
-    // Default options
-    return ['Option A', 'Option B', 'Option C', 'Option D'];
+    // Default options — generic but meaningful so we never render bare
+    // "Option A/B/C/D" placeholders if an objective isn't matched above.
+    return ['Yes', 'No', 'Sometimes', 'I don\'t know'];
   }
 
   function generateHintFromObjective(objective: string): string {
