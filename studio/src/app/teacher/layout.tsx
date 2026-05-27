@@ -6,34 +6,68 @@ import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { TeacherSidebar } from "@/components/layout/teacher-sidebar";
 import { AppHeader } from "@/components/layout/app-header";
 import { useTeacherContext } from "@/stores/teacher-context";
+import { useAuth } from "@/hooks/use-auth";
 import Link from "next/link";
 
 export default function TeacherLayout({ children }: { children: ReactNode }) {
-  const { setAssignments, setLoading } = useTeacherContext();
+  const { setAssignments, setLoading, reset } = useTeacherContext();
+  const { user, loading: authLoading } = useAuth();
 
-  // Load teacher assignments on mount
+  // Load the calling teacher's assignments. Identity comes from the
+  // session cookie via the API route — we no longer trust a
+  // localStorage `teacherId` or fall back to a demo UUID. If the user
+  // signs out (or signs in as someone else), we clear the persisted
+  // store so the previous teacher's data doesn't leak into the new
+  // session via the Zustand `persist` middleware.
   useEffect(() => {
+    if (authLoading) return;
+
+    if (!user) {
+      reset();
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
     async function loadAssignments() {
       setLoading(true);
       try {
-        // Get teacher ID from localStorage (demo mode)
-        const teacherId = localStorage.getItem('teacherId') || '00000000-0000-0000-0000-000000000001';
-        
-        const response = await fetch(`/api/teacher/assignments?teacherId=${teacherId}`);
+        const response = await fetch('/api/teacher/assignments', {
+          // Cookies are same-origin — explicit credentials guards
+          // against any future fetch default change.
+          credentials: 'same-origin',
+        });
+
+        if (response.status === 401) {
+          // Session expired between mount and fetch — bail silently
+          // and let the sidebar render its empty state.
+          if (!cancelled) {
+            reset();
+            setLoading(false);
+          }
+          return;
+        }
+
         const data = await response.json();
-        
-        if (data.success && data.data.grouped) {
+        if (!cancelled && data.success && data.data?.grouped) {
           setAssignments(data.data.grouped);
         }
       } catch (error) {
         console.error('Failed to load teacher assignments:', error);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
 
     loadAssignments();
-  }, [setAssignments, setLoading]);
+    return () => {
+      cancelled = true;
+    };
+    // user.id is the only field we need from `user`; depending on
+    // the whole object would re-run on every auth-state refresh
+    // (every tab focus, every token refresh).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, authLoading]);
 
   return (
     <SidebarProvider>

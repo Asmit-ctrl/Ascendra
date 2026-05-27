@@ -1,45 +1,68 @@
-import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { createSupabaseRouteHandlerClient } from '@/lib/supabase/route-handler';
 
 /**
  * API Route: /api/teacher/assignments
- * 
- * Handles CRUD operations for teacher grade and subject assignments
- * following the CBC curriculum structure.
+ *
+ * CRUD over the teacher's own grade/subject assignments.
+ *
+ * Security model:
+ *   - Caller is identified by their session cookie (Supabase Auth).
+ *   - `teacherId` is ALWAYS derived from `auth.getUser()`. We do not
+ *     accept it from query strings or request bodies — every previous
+ *     `?teacherId=...` parameter is now ignored, and the equivalent
+ *     fields in POST/PUT/DELETE bodies are dropped.
+ *   - The Supabase client is cookie-aware and uses the anon key, so
+ *     RLS policies (auth.uid() = teacher_id) act as the second line
+ *     of defense behind the explicit `user.id` checks below.
  */
 
-// Initialize Supabase client
-function getSupabaseClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  return createClient(supabaseUrl, supabaseKey);
+type AssignmentInput = {
+  grade: string;
+  level: string;
+  teaching_model?: 'generalist' | 'specialist';
+  subject_category?: string | null;
+  subjects?: string[];
+};
+
+async function requireUser() {
+  const supabase = await createSupabaseRouteHandlerClient();
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) {
+    return {
+      // The `as any` cast is a deliberate hole: the generated
+      // `Database` types in src/lib/supabase/types.ts don't yet
+      // include teacher_grade_assignments / teacher_subject_assignments
+      // (added in migration 003). Once you regenerate types from
+      // the live schema (`supabase gen types typescript ...`), this
+      // cast can come out and the queries below will be fully typed.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      supabase: supabase as any,
+      user: null,
+      response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }),
+    };
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return { supabase: supabase as any, user, response: null };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// GET: Fetch teacher's assignments
+// GET: fetch the calling teacher's assignments
 // ═══════════════════════════════════════════════════════════════════════════
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
-    const supabase = getSupabaseClient();
-    
-    // Get teacher ID from query params or auth
-    const { searchParams } = new URL(request.url);
-    const teacherId = searchParams.get('teacherId');
-    
-    if (!teacherId) {
-      return NextResponse.json(
-        { error: 'Teacher ID is required' },
-        { status: 400 }
-      );
-    }
+    const { supabase, user, response } = await requireUser();
+    if (!user) return response;
 
-    // Fetch grade assignments
+    // Fetch grade assignments. RLS limits the result to this teacher,
+    // but the explicit `.eq('teacher_id', user.id)` makes the intent
+    // obvious in code review and survives policy regressions.
     const { data: gradeAssignments, error: gradeError } = await supabase
       .from('teacher_grade_assignments')
       .select('*')
-      .eq('teacher_id', teacherId)
+      .eq('teacher_id', user.id)
       .eq('is_active', true)
       .order('grade');
 
@@ -47,85 +70,83 @@ export async function GET(request: NextRequest) {
       console.error('Error fetching grade assignments:', gradeError);
       return NextResponse.json(
         { error: 'Failed to fetch grade assignments' },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
-    // Fetch subject assignments
     const { data: subjectAssignments, error: subjectError } = await supabase
       .from('teacher_subject_assignments')
       .select('*')
-      .eq('teacher_id', teacherId)
+      .eq('teacher_id', user.id)
       .eq('is_active', true)
-      .order('grade, subject');
+      // PostgREST treats `.order(string)` as a single column name, so
+      // the previous `.order('grade, subject')` was a no-op on the
+      // second key. Chain two `.order()` calls instead.
+      .order('grade')
+      .order('subject');
 
     if (subjectError) {
       console.error('Error fetching subject assignments:', subjectError);
       return NextResponse.json(
         { error: 'Failed to fetch subject assignments' },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
-    // Group subjects by grade
-    const assignmentsByGrade = gradeAssignments.map((grade) => ({
+    const grouped = (gradeAssignments ?? []).map((grade: { grade: string }) => ({
       ...grade,
-      subjects: subjectAssignments
-        .filter((subject) => subject.grade === grade.grade)
-        .map((subject) => subject.subject)
+      subjects: (subjectAssignments ?? [])
+        .filter((s: { grade: string }) => s.grade === grade.grade)
+        .map((s: { subject: string }) => s.subject),
     }));
 
     return NextResponse.json({
       success: true,
       data: {
-        grades: gradeAssignments,
-        subjects: subjectAssignments,
-        grouped: assignmentsByGrade
-      }
+        grades: gradeAssignments ?? [],
+        subjects: subjectAssignments ?? [],
+        grouped,
+      },
     });
-
   } catch (error) {
     console.error('Error in GET /api/teacher/assignments:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// POST: Create new teacher assignments
+// POST: upsert the calling teacher's assignments
 // ═══════════════════════════════════════════════════════════════════════════
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = getSupabaseClient();
-    const body = await request.json();
-    
-    const { teacherId, assignments } = body;
+    const { supabase, user, response } = await requireUser();
+    if (!user) return response;
 
-    if (!teacherId || !assignments || !Array.isArray(assignments)) {
+    const body = await request.json().catch(() => null);
+    if (!body || !Array.isArray(body.assignments)) {
       return NextResponse.json(
-        { error: 'Invalid request body. Expected teacherId and assignments array' },
-        { status: 400 }
+        { error: 'Invalid request body. Expected { assignments: [...] }' },
+        { status: 400 },
       );
     }
+    const assignments = body.assignments as AssignmentInput[];
 
-    // Prepare grade assignments
-    const gradeAssignments = assignments.map((assignment) => ({
-      teacher_id: teacherId,
-      grade: assignment.grade,
-      level: assignment.level,
-      teaching_model: assignment.teaching_model || 'specialist',
-      is_active: true
+    // Force teacher_id from the session — any `teacherId` field in
+    // the body is silently ignored.
+    const gradeRows = assignments.map((a) => ({
+      teacher_id: user.id,
+      grade: a.grade,
+      level: a.level,
+      teaching_model: a.teaching_model ?? 'specialist',
+      is_active: true,
     }));
 
-    // Insert grade assignments
     const { data: insertedGrades, error: gradeError } = await supabase
       .from('teacher_grade_assignments')
-      .upsert(gradeAssignments, {
+      .upsert(gradeRows, {
         onConflict: 'teacher_id,grade',
-        ignoreDuplicates: false
+        ignoreDuplicates: false,
       })
       .select();
 
@@ -133,30 +154,29 @@ export async function POST(request: NextRequest) {
       console.error('Error inserting grade assignments:', gradeError);
       return NextResponse.json(
         { error: 'Failed to create grade assignments', details: gradeError.message },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
-    // Prepare subject assignments (only for specialist grades)
-    const subjectAssignments = assignments
-      .filter((assignment) => assignment.subjects && assignment.subjects.length > 0)
-      .flatMap((assignment) =>
-        assignment.subjects.map((subject: string) => ({
-          teacher_id: teacherId,
-          grade: assignment.grade,
-          subject: subject,
-          subject_category: assignment.subject_category || null,
-          is_active: true
-        }))
+    const subjectRows = assignments
+      .filter((a) => Array.isArray(a.subjects) && a.subjects.length > 0)
+      .flatMap((a) =>
+        (a.subjects ?? []).map((subject) => ({
+          teacher_id: user.id,
+          grade: a.grade,
+          subject,
+          subject_category: a.subject_category ?? null,
+          is_active: true,
+        })),
       );
 
-    let insertedSubjects = null;
-    if (subjectAssignments.length > 0) {
+    let insertedSubjects: typeof subjectRows | null = null;
+    if (subjectRows.length > 0) {
       const { data, error: subjectError } = await supabase
         .from('teacher_subject_assignments')
-        .upsert(subjectAssignments, {
+        .upsert(subjectRows, {
           onConflict: 'teacher_id,grade,subject',
-          ignoreDuplicates: false
+          ignoreDuplicates: false,
         })
         .select();
 
@@ -164,7 +184,7 @@ export async function POST(request: NextRequest) {
         console.error('Error inserting subject assignments:', subjectError);
         return NextResponse.json(
           { error: 'Failed to create subject assignments', details: subjectError.message },
-          { status: 500 }
+          { status: 500 },
         );
       }
       insertedSubjects = data;
@@ -172,161 +192,113 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: {
-        grades: insertedGrades,
-        subjects: insertedSubjects
-      }
+      data: { grades: insertedGrades, subjects: insertedSubjects },
     });
-
   } catch (error) {
     console.error('Error in POST /api/teacher/assignments:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PUT: Update existing teacher assignments
+// PUT: update one of the calling teacher's assignments
 // ═══════════════════════════════════════════════════════════════════════════
 
 export async function PUT(request: NextRequest) {
   try {
-    const supabase = getSupabaseClient();
-    const body = await request.json();
-    
-    const { teacherId, assignmentId, updates } = body;
+    const { supabase, user, response } = await requireUser();
+    if (!user) return response;
 
-    if (!teacherId || !assignmentId || !updates) {
+    const body = await request.json().catch(() => null);
+    if (!body || !body.assignmentId || !body.updates) {
       return NextResponse.json(
-        { error: 'Invalid request body' },
-        { status: 400 }
+        { error: 'Invalid request body. Expected { assignmentId, updates }' },
+        { status: 400 },
       );
     }
 
-    // Determine if this is a grade or subject assignment update
-    const isGradeUpdate = updates.grade !== undefined;
+    const { assignmentId, updates } = body as { assignmentId: string; updates: Record<string, unknown> };
 
-    if (isGradeUpdate) {
-      const { data, error } = await supabase
-        .from('teacher_grade_assignments')
-        .update(updates)
-        .eq('id', assignmentId)
-        .eq('teacher_id', teacherId)
-        .select();
+    // Defense in depth: strip teacher_id from the update payload —
+    // a teacher must not be able to reassign a row to a different
+    // user, even via a forged PATCH.
+    if ('teacher_id' in updates) delete updates.teacher_id;
+    if ('id' in updates) delete updates.id;
 
-      if (error) {
-        console.error('Error updating grade assignment:', error);
-        return NextResponse.json(
-          { error: 'Failed to update grade assignment' },
-          { status: 500 }
-        );
-      }
+    const isGradeUpdate = 'grade' in updates || 'level' in updates || 'teaching_model' in updates;
+    const table = isGradeUpdate ? 'teacher_grade_assignments' : 'teacher_subject_assignments';
 
-      return NextResponse.json({
-        success: true,
-        data: data[0]
-      });
-    } else {
-      const { data, error } = await supabase
-        .from('teacher_subject_assignments')
-        .update(updates)
-        .eq('id', assignmentId)
-        .eq('teacher_id', teacherId)
-        .select();
+    const { data, error } = await supabase
+      .from(table)
+      .update(updates)
+      .eq('id', assignmentId)
+      .eq('teacher_id', user.id)
+      .select();
 
-      if (error) {
-        console.error('Error updating subject assignment:', error);
-        return NextResponse.json(
-          { error: 'Failed to update subject assignment' },
-          { status: 500 }
-        );
-      }
-
-      return NextResponse.json({
-        success: true,
-        data: data[0]
-      });
+    if (error) {
+      console.error(`Error updating ${table}:`, error);
+      return NextResponse.json(
+        { error: `Failed to update ${isGradeUpdate ? 'grade' : 'subject'} assignment` },
+        { status: 500 },
+      );
     }
 
+    if (!data || data.length === 0) {
+      return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true, data: data[0] });
   } catch (error) {
     console.error('Error in PUT /api/teacher/assignments:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// DELETE: Remove teacher assignments
+// DELETE: soft-delete one of the calling teacher's assignments
 // ═══════════════════════════════════════════════════════════════════════════
 
 export async function DELETE(request: NextRequest) {
   try {
-    const supabase = getSupabaseClient();
+    const { supabase, user, response } = await requireUser();
+    if (!user) return response;
+
     const { searchParams } = new URL(request.url);
-    
-    const teacherId = searchParams.get('teacherId');
     const assignmentId = searchParams.get('assignmentId');
-    const type = searchParams.get('type'); // 'grade' or 'subject'
+    const type = searchParams.get('type'); // 'grade' | 'subject'
 
-    if (!teacherId || !assignmentId || !type) {
+    if (!assignmentId || (type !== 'grade' && type !== 'subject')) {
       return NextResponse.json(
-        { error: 'Missing required parameters' },
-        { status: 400 }
+        { error: 'Missing or invalid parameters. Need assignmentId and type=grade|subject' },
+        { status: 400 },
       );
     }
 
-    if (type === 'grade') {
-      // Soft delete by setting is_active to false
-      const { error } = await supabase
-        .from('teacher_grade_assignments')
-        .update({ is_active: false })
-        .eq('id', assignmentId)
-        .eq('teacher_id', teacherId);
+    const table = type === 'grade' ? 'teacher_grade_assignments' : 'teacher_subject_assignments';
 
-      if (error) {
-        console.error('Error deleting grade assignment:', error);
-        return NextResponse.json(
-          { error: 'Failed to delete grade assignment' },
-          { status: 500 }
-        );
-      }
-    } else if (type === 'subject') {
-      // Soft delete by setting is_active to false
-      const { error } = await supabase
-        .from('teacher_subject_assignments')
-        .update({ is_active: false })
-        .eq('id', assignmentId)
-        .eq('teacher_id', teacherId);
+    const { data, error } = await supabase
+      .from(table)
+      .update({ is_active: false })
+      .eq('id', assignmentId)
+      .eq('teacher_id', user.id)
+      .select();
 
-      if (error) {
-        console.error('Error deleting subject assignment:', error);
-        return NextResponse.json(
-          { error: 'Failed to delete subject assignment' },
-          { status: 500 }
-        );
-      }
-    } else {
+    if (error) {
+      console.error(`Error deleting ${table}:`, error);
       return NextResponse.json(
-        { error: 'Invalid assignment type' },
-        { status: 400 }
+        { error: `Failed to delete ${type} assignment` },
+        { status: 500 },
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      message: 'Assignment deleted successfully'
-    });
+    if (!data || data.length === 0) {
+      return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+    }
 
+    return NextResponse.json({ success: true, message: 'Assignment deleted successfully' });
   } catch (error) {
     console.error('Error in DELETE /api/teacher/assignments:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
