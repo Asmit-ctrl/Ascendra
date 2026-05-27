@@ -69,6 +69,29 @@ export default function SchemePreview({
     headers.push(useKiswahili ? 'Mpango wa Somo' : 'Lesson Plan');
   }
 
+  // Handle empty rows
+  if (!rows || rows.length === 0) {
+    return (
+      <div className="space-y-4">
+        <div className="text-center space-y-1">
+          <h3 className="font-serif text-lg font-bold text-foreground">
+            {useKiswahili ? 'Mpango wa Kazi' : 'Scheme of Work'}
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            {grade} — {subject} — {term}
+          </p>
+        </div>
+        <div className="rounded-lg border border-border p-8 text-center">
+          <p className="text-muted-foreground">
+            {useKiswahili
+              ? 'Hakuna masomo katika mpango huu wa kazi'
+              : 'No lessons found in this scheme of work'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -159,8 +182,8 @@ export default function SchemePreview({
       {/* Summary */}
       <div className="text-xs text-muted-foreground text-center">
         {useKiswahili
-          ? `Jumla ya masomo: ${rows.length} | Wiki: ${Math.max(...rows.map((r) => r.week))}`
-          : `Total lessons: ${rows.length} | Weeks: ${Math.max(...rows.map((r) => r.week))}`}
+          ? `Jumla ya masomo: ${rows.length} | Wiki: ${rows.length > 0 ? Math.max(...rows.map((r) => r.week || 0)) : 0}`
+          : `Total lessons: ${rows.length} | Weeks: ${rows.length > 0 ? Math.max(...rows.map((r) => r.week || 0)) : 0}`}
       </div>
     </div>
   );
