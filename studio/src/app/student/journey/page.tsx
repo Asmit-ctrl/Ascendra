@@ -146,7 +146,8 @@ export default function JourneyPage() {
     if (typeof window !== 'undefined') {
       window.sessionStorage.setItem(STORAGE_GRADE, g);
     }
-    setStep('subject');
+    // Redirect to dashboard after grade selection
+    router.push('/student');
   };
 
   const pickSubject = (subject: string) => {
