@@ -27,9 +27,15 @@ export default function ProfileDialog({ open, onOpenChange }: { open: boolean, o
     const [userName, setUserName] = useState(defaultUser.fullName);
     const [userEmail, setUserEmail] = useState(defaultUser.email);
     const [userAvatar, setUserAvatar] = useState<string | null>(null);
+    const [isClient, setIsClient] = useState(false);
+
+    // Ensure we're on the client before accessing localStorage
+    useEffect(() => {
+        setIsClient(true);
+    }, []);
 
     useEffect(() => {
-        if (open) {
+        if (open && isClient) {
             const storedName = localStorage.getItem('userName') || defaultUser.fullName;
             const storedEmail = localStorage.getItem('userEmail') || defaultUser.email;
             const storedAvatar = localStorage.getItem('userAvatar');
@@ -37,7 +43,7 @@ export default function ProfileDialog({ open, onOpenChange }: { open: boolean, o
             setUserEmail(storedEmail);
             setUserAvatar(storedAvatar);
         }
-    }, [open]);
+    }, [open, isClient]);
 
     const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();

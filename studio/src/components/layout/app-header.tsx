@@ -41,10 +41,15 @@ export function AppHeader() {
   const [userEmail, setUserEmail] = useState('user@example.com');
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
   const [title, setTitle] = useState('Dashboard');
+  const [isClient, setIsClient] = useState(false);
+
+  // Ensure we're on the client before accessing localStorage
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   useEffect(() => {
-    // Guard against SSR
-    if (typeof window === 'undefined') return;
+    if (!isClient) return;
     
     const storedName = localStorage.getItem('userName');
     const storedEmail = localStorage.getItem('userEmail');
@@ -52,7 +57,7 @@ export function AppHeader() {
     if (storedName) setUserName(storedName);
     if (storedEmail) setUserEmail(storedEmail);
     if (storedAvatar) setUserAvatar(storedAvatar);
-  }, []);
+  }, [isClient]);
   
   useEffect(() => {
       setTitle(getTitleFromPath(pathname));
