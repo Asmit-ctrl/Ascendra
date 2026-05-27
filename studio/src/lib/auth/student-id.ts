@@ -7,10 +7,16 @@
  */
 
 const FALLBACK_STUDENT_ID = 'user1';
+const DEMO_STUDENT_ID = 'student0';
 const STORAGE_KEYS = ['studentId', 'userId'] as const;
 
 export function getStudentId(): string {
   if (typeof window === 'undefined') return FALLBACK_STUDENT_ID;
+  
+  // Check for demo student first
+  const demoCheck = window.localStorage.getItem('studentId');
+  if (demoCheck === DEMO_STUDENT_ID) return DEMO_STUDENT_ID;
+  
   for (const key of STORAGE_KEYS) {
     const value = window.localStorage.getItem(key);
     if (value && value.trim().length > 0) return value;
@@ -18,4 +24,4 @@ export function getStudentId(): string {
   return FALLBACK_STUDENT_ID;
 }
 
-export { FALLBACK_STUDENT_ID };
+export { FALLBACK_STUDENT_ID, DEMO_STUDENT_ID };

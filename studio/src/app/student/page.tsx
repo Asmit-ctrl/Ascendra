@@ -111,6 +111,14 @@ export default function StudentDashboardPage() {
 
     setGamificationMode(loadGamificationMode());
 
+    // Check if this is student0 (demo/test student) - auto-set to Grade 2
+    const studentId = getStudentId();
+    if (studentId === 'student0') {
+      // Auto-set Grade 2 for student0
+      sessionStorage.setItem('learningJourney.grade', 'Grade 2');
+      sessionStorage.setItem('learningJourney.level', 'lower-primary');
+    }
+
     // Check if grade is set - if not, redirect to journey for grade selection.
     // sessionStorage (not localStorage) so the journey re-appears each fresh tab —
     // important for shared devices and term-to-term progression.
@@ -122,7 +130,7 @@ export default function StudentDashboardPage() {
 
     // Load personalized learning data
     loadPersonalizedData();
-  }, []);
+  }, [router]);
 
   const loadPersonalizedData = async () => {
     try {
