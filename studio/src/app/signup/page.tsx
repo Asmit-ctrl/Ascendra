@@ -15,7 +15,7 @@ export default function SignupPage() {
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <Button asChild size="lg">
-            <Link href="/student">
+            <Link href="/student/journey">
               <GraduationCap className="mr-2 h-5 w-5" />
               Continue as Student
             </Link>

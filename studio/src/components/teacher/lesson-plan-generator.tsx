@@ -77,7 +77,7 @@ export function LessonPlanGenerator() {
       const selectedStrand = strands?.find(s => s.name === strand)
       const selectedSubStrand = selectedStrand?.subStrands.find(ss => ss.name === subStrand)
 
-      const prompt = `Create a comprehensive, detailed lesson plan for a Kenyan CBC classroom.
+      const prompt = `Create a simple, practical lesson plan for a Kenyan CBC classroom.
 
 **LESSON DETAILS:**
 - Grade: ${grade.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
@@ -97,11 +97,11 @@ ${selectedSubStrand?.suggestedExperiences ? `Suggested Experiences: ${selectedSu
 **DIFFERENTIATION NEEDS:**
 ${differentiation.length > 0 ? differentiation.join(', ') : 'Mixed ability class'}
 
-Create a DETAILED, PRACTICAL lesson plan following this structure:
+Create a SIMPLE, PRACTICAL lesson plan following this EXACT structure:
 
 # LESSON PLAN: [Catchy Title]
 
-## 1. LESSON INFORMATION
+## LESSON INFORMATION
 - **Grade:** ${grade}
 - **Subject:** ${subject}
 - **Strand:** ${strand}
@@ -109,97 +109,60 @@ Create a DETAILED, PRACTICAL lesson plan following this structure:
 - **Duration:** ${duration} minutes
 - **Class Size:** ${classSize} students
 
-## 2. LEARNING OUTCOMES
+## LEARNING OUTCOMES
 By the end of this lesson, learners should be able to:
 1. [Specific, measurable outcome 1]
 2. [Specific, measurable outcome 2]
 3. [Specific, measurable outcome 3]
 
-## 3. KEY INQUIRY QUESTION(S)
-- [Main question that drives the lesson]
-
-## 4. CORE COMPETENCIES ADDRESSED
-- Communication and Collaboration
-- Critical Thinking and Problem Solving
-- [Other relevant competencies]
-
-## 5. VALUES INTEGRATED
-- [Value 1: How it's integrated]
-- [Value 2: How it's integrated]
-
-## 6. LEARNING RESOURCES
+## LEARNING RESOURCES
 **Materials:**
 - [List all materials needed - use locally available items]
 
-## 7. LESSON PROCEDURE
+## LESSON PROCEDURE
 
-### A. INTRODUCTION (${Math.round(parseInt(duration) * 0.15)} minutes)
-**Hook/Set Induction:**
-[Engaging activity to capture attention - use Kenyan context]
+### INTRODUCTION (${Math.round(parseInt(duration) * 0.15)} minutes)
+[Engaging activity to capture attention and activate prior knowledge - use Kenyan context like matatu, shillings, ugali, etc.]
 
-**Prior Knowledge Activation:**
-[Questions to activate prior knowledge]
+### STEP 1 (${Math.round(parseInt(duration) * 0.20)} minutes)
+**What the teacher does:**
+[Clear, specific actions the teacher takes]
 
-### B. DEVELOPMENT/MAIN ACTIVITY (${Math.round(parseInt(duration) * 0.60)} minutes)
-
-**Activity 1: [Name] (${Math.round(parseInt(duration) * 0.20)} minutes)**
-- **Teacher Actions:**
-  1. [Step-by-step what teacher does]
-  2. [Include questions to ask]
-  
-- **Learner Actions:**
-  1. [What students do]
-  2. [How they engage]
-  
-- **Kenyan Context Integration:**
-  [How you use local examples: matatu, shillings, ugali, etc.]
-
-**Activity 2: [Name] (${Math.round(parseInt(duration) * 0.20)} minutes)**
-- **Guided Practice:**
-  [Guided practice steps]
-  
-- **Learner Actions:**
-  [Practice activities]
-
-**Activity 3: [Name] (${Math.round(parseInt(duration) * 0.20)} minutes)**
-- **Independent Practice:**
-  [What students do independently]
-
-### C. CONCLUSION (${Math.round(parseInt(duration) * 0.15)} minutes)
-**Summary:**
-[How students summarize learning]
+**What learners do:**
+[Clear, specific actions learners take]
 
 **Assessment:**
-[Quick formative assessment - 3-5 questions or tasks]
+[How you check understanding]
 
-## 8. ASSESSMENT STRATEGIES
+### STEP 2 (${Math.round(parseInt(duration) * 0.20)} minutes)
+**What the teacher does:**
+[Clear, specific actions the teacher takes]
 
-**Formative Assessment (During Lesson):**
-- [Observation checklist items]
-- [Questions to ask]
+**What learners do:**
+[Clear, specific actions learners take]
 
-**Summative Assessment (End of Lesson):**
-- [Exit ticket or quick quiz]
+**Assessment:**
+[How you check understanding]
 
-## 9. DIFFERENTIATION STRATEGIES
+### STEP 3 (${Math.round(parseInt(duration) * 0.20)} minutes)
+**What the teacher does:**
+[Clear, specific actions the teacher takes]
 
-**For Struggling Learners:**
-- [Specific support strategies]
-- [Simplified tasks]
+**What learners do:**
+[Clear, specific actions learners take]
 
-**For Advanced Learners:**
-- [Extension activities]
-- [Challenge tasks]
+**Assessment:**
+[How you check understanding]
 
-## 10. HOMEWORK/EXTENSION
-**Assignment:**
-[Meaningful homework that reinforces learning]
+### CONCLUSION (${Math.round(parseInt(duration) * 0.10)} minutes)
+[How students summarize what they learned - quick recap and assessment]
 
-## 11. TEACHER REFLECTION PROMPTS
-After the lesson, reflect on:
-- What went well?
-- What challenges did learners face?
-- What would you do differently?
+### EXTENDED ACTIVITY
+**For homework or extra practice:**
+[Meaningful activity that reinforces the lesson - can be done at home or in class]
+
+**For advanced learners:**
+[Challenge activity for those who finish early or need extension]
 
 ---
 
@@ -207,11 +170,7 @@ After the lesson, reflect on:
 - Use Kenyan context throughout (matatu, shillings, ugali, chapati, sukuma wiki, etc.)
 - Include specific, actionable steps
 - Make it practical for a real Kenyan classroom
-- Align with CBC competencies and values
-- Include formative assessment throughout
-- Provide clear differentiation strategies
 - Use simple, clear language
-- Include time allocations for each section
 - Make it ready to print and use immediately`
 
       const response = await fetch(buildApiUrl(API_ENDPOINTS.AGENTS_CHAT), {

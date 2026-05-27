@@ -177,6 +177,16 @@ export default function GenericActivity({ activity, onComplete, onBack }: Generi
         return ['Tree', 'Car', 'Book', 'Chair'];
       } else if (objective.includes('animal')) {
         return ['Fish', 'Table', 'Pen', 'Cup'];
+      } else if (objective.includes('weather') || objective.includes('rain')) {
+        return ['Raincoat', 'Shorts', 'Sunglasses', 'Swimming suit'];
+      } else if (objective.includes('sun') || objective.includes('hot')) {
+        return ['Hat', 'Jacket', 'Boots', 'Scarf'];
+      } else if (objective.includes('cold')) {
+        return ['Sweater', 'Shorts', 'Sandals', 'T-shirt'];
+      } else if (objective.includes('water')) {
+        return ['River', 'Chair', 'Book', 'Pencil'];
+      } else if (objective.includes('food')) {
+        return ['Apple', 'Stone', 'Paper', 'Stick'];
       }
     } else if (subject === 'cre') {
       if (objective.includes('creation')) {

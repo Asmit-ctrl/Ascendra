@@ -352,7 +352,17 @@ export default function JourneyPage() {
                 </CardHeader>
                 <CardContent>
                   <Button
-                    onClick={() => router.push('/student/sandbox')}
+                    onClick={() => {
+                      if (grade) {
+                        // Get first available subject for this grade
+                        const firstSubject = subjects[0];
+                        if (firstSubject) {
+                          router.push(`/student/sandbox/${grade}/${encodeURIComponent(firstSubject.toLowerCase().replace(/\s+/g, '-'))}`);
+                        } else {
+                          router.push('/student/sandbox');
+                        }
+                      }
+                    }}
                     className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
                   >
                     <Gamepad2 className="h-4 w-4 mr-2" />

@@ -216,15 +216,18 @@ export default function SandboxPage() {
                   const isCompleted = completedActivityIds.includes(activity.id);
 
                   return (
-                    <Link 
-                      key={activity.id} 
+                    <Link
+                      key={activity.id}
                       href={isLocked ? '#' : `/student/sandbox/${grade}/${subject}/${activity.id}`}
-                      className={cn(isLocked && 'pointer-events-none')}
+                      className={cn(
+                        "block",
+                        isLocked && 'pointer-events-none cursor-not-allowed'
+                      )}
                     >
                       <Card className={cn(
                         "h-full transition-all",
-                        isLocked && "opacity-50",
-                        !isLocked && "hover:shadow-lg cursor-pointer",
+                        isLocked && "opacity-50 cursor-not-allowed",
+                        !isLocked && "hover:shadow-lg hover:border-primary cursor-pointer",
                         isCompleted && "border-2 border-green-500"
                       )}>
                         <CardHeader>
