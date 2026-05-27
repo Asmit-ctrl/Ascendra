@@ -130,31 +130,31 @@ export default function SchemePreview({
                   className={index % 2 === 0 ? 'bg-card' : 'bg-muted/50'}
                 >
                   <td className="px-3 py-2 text-xs align-top border-b border-border min-w-[40px] font-medium">
-                    {row.week}
+                    {row.week || '—'}
                   </td>
                   <td className="px-3 py-2 text-xs align-top border-b border-border min-w-[40px]">
-                    {row.lesson}
+                    {row.lesson || '—'}
                   </td>
                   <td className="px-3 py-2 text-xs align-top border-b border-border min-w-[120px] font-medium">
-                    {row.strand}
+                    {row.strand || '—'}
                   </td>
                   <td className="px-3 py-2 text-xs align-top border-b border-border min-w-[130px]">
-                    {row.subStrand}
+                    {row.subStrand || '—'}
                   </td>
                   <td className="px-3 py-2 text-xs align-top border-b border-border whitespace-pre-line min-w-[220px]">
-                    {row.specificLearningOutcome}
+                    {row.specificLearningOutcome || '—'}
                   </td>
                   <td className="px-3 py-2 text-xs align-top border-b border-border whitespace-pre-line min-w-[220px]">
-                    {row.learningExperiences}
+                    {row.learningExperiences || '—'}
                   </td>
                   <td className="px-3 py-2 text-xs align-top border-b border-border whitespace-pre-line min-w-[150px]">
-                    {row.keyInquiryQuestion}
+                    {row.keyInquiryQuestion || '—'}
                   </td>
                   <td className="px-3 py-2 text-xs align-top border-b border-border min-w-[150px]">
-                    {row.learningResources}
+                    {row.learningResources || '—'}
                   </td>
                   <td className="px-3 py-2 text-xs align-top border-b border-border min-w-[120px]">
-                    {row.assessmentMethods}
+                    {row.assessmentMethods || '—'}
                   </td>
                   <td className="px-3 py-2 text-xs align-top border-b border-border min-w-[60px]">
                     {row.reflection || '—'}
@@ -166,6 +166,7 @@ export default function SchemePreview({
                         size="sm"
                         onClick={() => onGenerateLessonPlan(row, index)}
                         className="h-7 gap-1"
+                        disabled={!row.strand && !row.subStrand && !row.specificLearningOutcome}
                       >
                         <BookOpen className="h-3 w-3" />
                         {useKiswahili ? 'Tengeneza' : 'Generate'}
