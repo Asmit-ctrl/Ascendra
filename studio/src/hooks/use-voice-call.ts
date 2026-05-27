@@ -140,6 +140,7 @@ export function useVoiceCall(options: UseVoiceCallOptions): UseVoiceCallReturn {
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Failed to initialize voice call';
         setError(errorMsg);
+        setIsInitialized(true); // Set to true so error UI can be displayed
         options.onError?.(err as Error);
       }
     };
@@ -183,6 +184,7 @@ export function useVoiceCall(options: UseVoiceCallOptions): UseVoiceCallReturn {
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to start call';
       setError(errorMsg);
+      setState(prev => ({ ...prev, isActive: false, isListening: false }));
       options.onError?.(err as Error);
     }
   }, [options]);

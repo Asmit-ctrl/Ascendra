@@ -152,11 +152,12 @@ export class VoiceCallOrchestrator {
   }
 
   /**
-   * Initialize all components
+   * Initialize all components (without requesting microphone access yet)
    */
   async initialize(): Promise<void> {
     try {
-      await this.audioStream.initialize();
+      // Only initialize audio playback, not recording yet
+      // Microphone access will be requested when startCall() is called
       await this.audioPlayback.initialize();
       
       console.log('✅ Voice call system ready');
@@ -172,7 +173,7 @@ export class VoiceCallOrchestrator {
   }
 
   /**
-   * Start voice call
+   * Start voice call (requests microphone permission here)
    */
   async startCall(): Promise<void> {
     if (this.state.isActive) {
@@ -180,29 +181,40 @@ export class VoiceCallOrchestrator {
       return;
     }
 
-    this.state.isActive = true;
-    this.state.isListening = true;
+    try {
+      // Initialize audio stream NOW (this will trigger the microphone permission popup)
+      await this.audioStream.initialize();
+      
+      this.state.isActive = true;
+      this.state.isListening = true;
 
-    // Start audio recording with callbacks
-    this.audioStream.startRecording({
-      onAudioChunk: (chunk) => {
-        // Audio chunks are processed in real-time
-        // Could be sent to server for STT if needed
-      },
-      onVADChange: (vadResult) => {
-        this.handleVADChange(vadResult.isSpeaking);
-      },
-      onSilenceDetected: () => {
-        this.handleSilenceDetected();
-      },
-    });
+      // Start audio recording with callbacks
+      this.audioStream.startRecording({
+        onAudioChunk: (chunk) => {
+          // Audio chunks are processed in real-time
+          // Could be sent to server for STT if needed
+        },
+        onVADChange: (vadResult) => {
+          this.handleVADChange(vadResult.isSpeaking);
+        },
+        onSilenceDetected: () => {
+          this.handleSilenceDetected();
+        },
+      });
 
-    this.emitEvent('call_started', {
-      timestamp: Date.now(),
-      config: this.config,
-    });
+      this.emitEvent('call_started', {
+        timestamp: Date.now(),
+        config: this.config,
+      });
 
-    console.log('📞 Voice call started');
+      console.log('📞 Voice call started');
+    } catch (error) {
+      this.state.isActive = false;
+      this.state.isListening = false;
+      console.error('Failed to start call:', error);
+      this.emitEvent('error', { error });
+      throw error;
+    }
   }
 
   /**

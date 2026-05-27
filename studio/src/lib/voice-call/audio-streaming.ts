@@ -40,6 +40,7 @@ export class AudioStreamManager {
   private source: MediaStreamAudioSourceNode | null = null;
   private gainNode: GainNode | null = null;
   
+  private isInitialized = false;
   private isRecording = false;
   private vadThreshold = 0.01; // Voice activity detection threshold
   private silenceTimeout = 1000; // ms of silence before considering speech ended
@@ -64,6 +65,12 @@ export class AudioStreamManager {
    * Initialize audio context and get microphone access
    */
   async initialize(): Promise<void> {
+    // Prevent double initialization
+    if (this.isInitialized) {
+      console.log('Audio stream already initialized');
+      return;
+    }
+
     if (typeof window === 'undefined') {
       throw new Error('Audio streaming only works in browser environment');
     }
@@ -85,6 +92,24 @@ export class AudioStreamManager {
           autoGainControl: this.config.autoGainControl,
         },
       });
+    } catch (error: any) {
+      // Provide user-friendly error messages for microphone access issues
+      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+        throw new Error('Microphone access blocked — enable it in your browser settings and try again.');
+      } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+        throw new Error('No microphone found — please connect a microphone and try again.');
+      } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+        throw new Error('Microphone is already in use by another application.');
+      } else if (error.name === 'OverconstrainedError') {
+        throw new Error('Microphone does not support the required audio settings.');
+      } else if (error.name === 'SecurityError') {
+        throw new Error('Microphone access denied due to security restrictions.');
+      } else {
+        throw new Error(`Failed to access microphone: ${error.message || 'Unknown error'}`);
+      }
+    }
+
+    try {
 
       // Create audio processing chain
       this.source = this.audioContext.createMediaStreamSource(this.mediaStream);
@@ -135,9 +160,11 @@ export class AudioStreamManager {
       this.gainNode.connect(this.processor);
       this.processor.connect(this.audioContext.destination);
 
+      this.isInitialized = true;
       console.log('🎤 Audio streaming initialized');
     } catch (error) {
       console.error('Failed to initialize audio streaming:', error);
+      this.isInitialized = false;
       throw new Error('Microphone access denied or not available');
     }
   }

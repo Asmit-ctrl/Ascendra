@@ -72,20 +72,49 @@ export function VoiceCallInterface({ userId, conversationId, onClose }: VoiceCal
   }
 
   if (error) {
+    const isMicrophoneError = error.toLowerCase().includes('microphone') ||
+                              error.toLowerCase().includes('permission') ||
+                              error.toLowerCase().includes('notallowederror') ||
+                              error.toLowerCase().includes('denied');
+    
     return (
       <Card className="w-full max-w-2xl mx-auto border-destructive">
         <CardContent className="p-8">
           <div className="text-center space-y-4">
-            <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
-              <PhoneOff className="w-6 h-6 text-destructive" />
+            <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
+              {isMicrophoneError ? (
+                <MicOff className="w-8 h-8 text-destructive" />
+              ) : (
+                <PhoneOff className="w-8 h-8 text-destructive" />
+              )}
             </div>
             <div>
-              <h3 className="font-semibold text-lg">Voice Call Error</h3>
+              <h3 className="font-semibold text-lg">
+                {isMicrophoneError ? 'Microphone Access Blocked' : 'Voice Call Error'}
+              </h3>
               <p className="text-sm text-muted-foreground mt-2">{error}</p>
+              {isMicrophoneError && (
+                <div className="mt-4 p-4 bg-muted rounded-lg text-left space-y-2">
+                  <p className="text-sm font-medium">To enable microphone access:</p>
+                  <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+                    <li>Click the lock icon in your browser's address bar</li>
+                    <li>Find "Microphone" in the permissions list</li>
+                    <li>Change the setting to "Allow"</li>
+                    <li>Refresh the page and try again</li>
+                  </ol>
+                </div>
+              )}
             </div>
-            <Button onClick={onClose} variant="outline">
-              Close
-            </Button>
+            <div className="flex gap-2 justify-center">
+              <Button onClick={onClose} variant="outline">
+                Close
+              </Button>
+              {isMicrophoneError && (
+                <Button onClick={() => window.location.reload()} variant="default">
+                  Refresh Page
+                </Button>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>
