@@ -7,10 +7,10 @@
 
 /**
  * Get the AI Agents backend URL
- * 
+ *
  * In production, this MUST be set via NEXT_PUBLIC_AI_AGENTS_URL environment variable.
  * In development, falls back to localhost.
- * 
+ *
  * Returns null if not configured (instead of throwing) to prevent build/render failures.
  */
 export function getApiUrl(): string | null {
@@ -113,3 +113,5 @@ export function buildWebSocketUrl(endpoint: string): string {
   
   return `${baseUrl}${endpoint}`;
 }
+
+// Made with Bob

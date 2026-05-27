@@ -73,14 +73,16 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
+        "http://localhost:3001",
         "https://sentastudio.vercel.app",
         "https://sentastudio-git-main-dans-projects-5f474b51.vercel.app",
         os.getenv("FRONTEND_URL", "https://sentastudio.vercel.app"),
     ],
     allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Include teacher dashboard routes

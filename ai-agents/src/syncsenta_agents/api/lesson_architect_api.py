@@ -201,16 +201,25 @@ async def generate_scheme(request: GenerateSchemeRequest) -> Dict[str, Any]:
         }
 
     except Exception as exc:
-        logger.error(
-            "Failed to generate scheme",
-            error=str(exc),
-            error_type=type(exc).__name__,
-            grade=request.grade,
-            subject=request.subject,
-            term=request.term,
-        )
+        import traceback
+        error_details = {
+            "error": str(exc),
+            "error_type": type(exc).__name__,
+            "traceback": traceback.format_exc(),
+            "grade": request.grade,
+            "subject": request.subject,
+            "term": request.term,
+        }
+        logger.error("Failed to generate scheme", **error_details)
         raise HTTPException(
-            status_code=500, detail=f"Failed to generate scheme: {exc}"
+            status_code=500,
+            detail={
+                "error": f"Failed to generate scheme: {str(exc)}",
+                "type": type(exc).__name__,
+                "grade": request.grade,
+                "subject": request.subject,
+                "term": request.term,
+            }
         )
 
 
