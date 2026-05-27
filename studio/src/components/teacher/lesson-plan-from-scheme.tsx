@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Loader2, FileText, Calendar, BookOpen, Sparkles, ChevronRight } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { useAuth } from '@/hooks/use-auth'
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/api-config'
 import SchemePreview from '@/components/scheme-wizard/scheme-preview'
 import LessonPlanDialog from '@/components/scheme-wizard/lesson-plan-dialog'
@@ -28,6 +29,7 @@ interface SavedScheme {
 
 export function LessonPlanFromScheme() {
   const { toast } = useToast()
+  const { user, profile } = useAuth()
   const [loading, setLoading] = useState(false)
   const [schemes, setSchemes] = useState<SavedScheme[]>([])
   const [selectedScheme, setSelectedScheme] = useState<SavedScheme | null>(null)
@@ -54,7 +56,15 @@ export function LessonPlanFromScheme() {
         return
       }
       
-      const teacherId = localStorage.getItem('userId') || 'teacher_001'
+      // Only fetch schemes if user is authenticated
+      if (!user?.id) {
+        console.warn('No authenticated user found')
+        setSchemes([])
+        setLoading(false)
+        return
+      }
+      
+      const teacherId = user.id
       const response = await fetch(
         `${buildApiUrl(API_ENDPOINTS.LESSON_ARCHITECT_SCHEMES)}?teacher_id=${teacherId}`
       )
@@ -97,13 +107,22 @@ export function LessonPlanFromScheme() {
     // Guard against SSR
     if (typeof window === 'undefined') return
 
+    if (!user?.id) {
+      toast({
+        title: 'Authentication Required',
+        description: 'Please sign in to unpack outcomes.',
+        variant: 'destructive',
+      })
+      return
+    }
+
     setOriginalOutcome(outcome)
     setUnpacking(true)
     setUnpackedOutcome(null)
     setUnpackDialogOpen(true)
 
     try {
-      const teacherId = localStorage.getItem('userId') || 'teacher_001'
+      const teacherId = user.id
       const response = await fetch(
         buildApiUrl(API_ENDPOINTS.LESSON_ARCHITECT_UNPACK_OUTCOME),
         {
@@ -227,7 +246,7 @@ export function LessonPlanFromScheme() {
           </CardContent>
         </Card>
 
-        {selectedRow && (
+        {selectedRow && user && (
           <LessonPlanDialog
             open={lessonPlanDialogOpen}
             onOpenChange={setLessonPlanDialogOpen}
@@ -235,6 +254,8 @@ export function LessonPlanFromScheme() {
             grade={selectedScheme.grade}
             subject={selectedScheme.subject}
             term={selectedScheme.term}
+            teacherId={user.id}
+            schemeId={selectedScheme.scheme_id}
           />
         )}
 
