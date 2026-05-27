@@ -1,11 +1,9 @@
 """Multi-Provider LLM Client with Automatic Fallback.
 
-Cascading fallback system:
-1. Groq (fastest, free, rate-limited)
-2. OpenRouter (paid/200 free daily, reliable)
-3. Puter.js (user-pays, unlimited for users)
+Primary provider:
+1. Groq (fast, free, rate-limited but sufficient for our needs)
 
-Automatically switches providers on rate limits or failures.
+Automatically handles rate limits with retry logic.
 """
 
 import os
@@ -21,8 +19,6 @@ log = logging.getLogger(__name__)
 class ProviderType(str, Enum):
     """Available LLM providers."""
     GROQ = "groq"
-    OPENROUTER = "openrouter"
-    PUTER = "puter"
 
 
 @dataclass
@@ -58,7 +54,7 @@ class MultiProviderClient:
         """Initialize provider configurations from environment."""
         providers = []
         
-        # 1. Groq (Primary - fastest)
+        # Groq (Primary and only provider - fast and free)
         groq_key = os.getenv("GROQ_API_KEY")
         if groq_key:
             providers.append(ProviderConfig(
@@ -72,40 +68,13 @@ class MultiProviderClient:
                 rate_limit_retry_delay=120  # Groq: wait 2 minutes
             ))
         
-        # 2. OpenRouter (Secondary - reliable)
-        openrouter_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("OPEN_ROUTER")
-        if openrouter_key:
-            providers.append(ProviderConfig(
-                name=ProviderType.OPENROUTER,
-                api_key=openrouter_key,
-                base_url="https://openrouter.ai/api/v1",
-                models=[
-                    "meta-llama/llama-3.1-70b-instruct",
-                    "meta-llama/llama-3.1-8b-instruct",
-                    "google/gemini-2.0-flash-exp:free",  # Free tier
-                ],
-                rate_limit_retry_delay=60
-            ))
-        
-        # 3. Puter.js (Tertiary - user-pays, unlimited)
-        # Note: Puter.js is frontend-only, so we mark it as disabled for backend
-        # Frontend can use it directly via puter.ai.chat()
-        providers.append(ProviderConfig(
-            name=ProviderType.PUTER,
-            api_key=None,  # No API key needed
-            base_url="https://api.puter.com/ai",
-            models=["gpt-4o", "claude-3-5-sonnet"],
-            enabled=False,  # Disabled for backend, enabled in frontend
-            rate_limit_retry_delay=0
-        ))
-        
         if not providers:
             raise ValueError(
-                "No LLM providers configured. Set GROQ_API_KEY or OPENROUTER_API_KEY"
+                "No LLM providers configured. Set GROQ_API_KEY environment variable"
             )
         
         self.logger.info(
-            f"Initialized {len([p for p in providers if p.enabled])} providers: "
+            f"Initialized {len([p for p in providers if p.enabled])} provider(s): "
             f"{', '.join(p.name for p in providers if p.enabled)}"
         )
         
@@ -230,10 +199,6 @@ class MultiProviderClient:
             return await self._generate_groq(
                 provider, prompt, system, max_tokens, temperature
             )
-        elif provider.name == ProviderType.OPENROUTER:
-            return await self._generate_openrouter(
-                provider, prompt, system, max_tokens, temperature
-            )
         else:
             raise ValueError(f"Unsupported provider: {provider.name}")
     
@@ -262,52 +227,6 @@ class MultiProviderClient:
         
         response = await asyncio.to_thread(llm.invoke, messages)
         return response.content if hasattr(response, 'content') else str(response)
-    
-    async def _generate_openrouter(
-        self,
-        provider: ProviderConfig,
-        prompt: str,
-        system: Optional[str],
-        max_tokens: int,
-        temperature: float
-    ) -> str:
-        """Generate using OpenRouter."""
-        import aiohttp
-        
-        messages = []
-        if system:
-            messages.append({"role": "system", "content": system})
-        messages.append({"role": "user", "content": prompt})
-        
-        headers = {
-            "Authorization": f"Bearer {provider.api_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://mwalimu-ai.vercel.app",  # Your site
-            "X-Title": "Mwalimu AI",
-        }
-        
-        payload = {
-            "model": provider.models[0],
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-        }
-        
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{provider.base_url}/chat/completions",
-                headers=headers,
-                json=payload,
-                timeout=aiohttp.ClientTimeout(total=120)
-            ) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    raise Exception(
-                        f"OpenRouter API error {response.status}: {error_text}"
-                    )
-                
-                data = await response.json()
-                return data["choices"][0]["message"]["content"]
     
     def get_provider_status(self) -> Dict[str, Any]:
         """Get status of all providers."""
