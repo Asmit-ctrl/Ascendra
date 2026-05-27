@@ -752,12 +752,33 @@ export function getActivitiesForGradeSubject(
   return activities;
 }
 
-// Helper function to get activity by ID
+// Helper function to get activity by ID.
+//
+// Curriculum-generated activities (ids shaped like `g2-english-s1-ss1`) live
+// in `curriculum-activities-mapper.ts`, not in `activityRegistry`. The old
+// implementation only walked the registry, so any deep link into a curriculum
+// activity rendered the "Activity Not Found" fallback. We now check the
+// curriculum activities for the grades/subjects that produce them before
+// giving up.
 export function getActivityById(activityId: string): Activity | undefined {
   for (const activities of Object.values(activityRegistry)) {
     const activity = activities.find(a => a.id === activityId);
     if (activity) return activity;
   }
+
+  // Curriculum activities are only generated for Grade 2 today; the id prefix
+  // tells us which subject mapper to consult so we don't pay the cost of
+  // generating every curriculum on every lookup.
+  if (activityId.startsWith('g2-')) {
+    const subjectFromId = activityId.split('-')[1] as SubjectId | undefined;
+    const curriculumSubjects: SubjectId[] = ['english', 'kiswahili', 'mathematics'];
+    if (subjectFromId && curriculumSubjects.includes(subjectFromId)) {
+      const curriculumActivities = getCurriculumActivities(subjectFromId);
+      const found = curriculumActivities.find(a => a.id === activityId);
+      if (found) return found;
+    }
+  }
+
   return undefined;
 }
 
