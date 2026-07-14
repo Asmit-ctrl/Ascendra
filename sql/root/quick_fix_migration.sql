@@ -1,3 +1,15 @@
+-- Quick fix migration (centralized)
+
+-- Add storage tracking columns to schemes table
+ALTER TABLE schemes 
+ADD COLUMN IF NOT EXISTS storage_path TEXT,
+ADD COLUMN IF NOT EXISTS exported_at TIMESTAMP WITH TIME ZONE,
+ADD COLUMN IF NOT EXISTS export_format TEXT DEFAULT 'json',
+ADD COLUMN IF NOT EXISTS is_training_data BOOLEAN DEFAULT false;
+
+-- Create indexes for training data queries
+CREATE INDEX IF NOT EXISTS idx_schemes_training_data ON schemes(is_training_data, exported_at DESC);
+CREATE INDEX IF NOT EXISTS idx_schemes_storage_path ON schemes(storage_path) WHERE storage_path IS NOT NULL;
 -- ============================================================================
 -- QUICK FIX: Add missing columns for training data export
 -- Run this in Supabase SQL Editor if you get PGRST204 error

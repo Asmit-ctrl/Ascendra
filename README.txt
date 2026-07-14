@@ -30,6 +30,7 @@ ai-agents/                 # AI backend agents
 api/                       # API services
 studio/                    # Web dashboard
 scripts/                   # Deployment scripts
+sql/                       # Centralized SQL migrations and helpers
 
 DEPLOYMENT:
 -----------

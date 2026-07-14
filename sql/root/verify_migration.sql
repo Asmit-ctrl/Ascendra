@@ -1,3 +1,14 @@
+-- Verify migration helper (centralized)
+
+SELECT 
+  column_name, 
+  data_type, 
+  is_nullable,
+  column_default
+FROM information_schema.columns 
+WHERE table_name = 'schemes' 
+AND column_name IN ('exported_at', 'storage_path', 'is_training_data', 'export_format')
+ORDER BY column_name;
 -- ============================================================================
 -- VERIFICATION SCRIPT: Check if training data export migration is applied
 -- Run this in Supabase SQL Editor to verify the fix
