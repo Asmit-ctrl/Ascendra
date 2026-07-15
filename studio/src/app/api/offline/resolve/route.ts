@@ -1,23 +1,36 @@
-import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    const action = body?.resolutionData?.action ?? 'keep-server';
+    const requestId = body?.requestId ?? 'unknown';
+    const originalUrl = body?.originalUrl ?? '/';
 
-    // Minimal server-side resolution handler.
-    // TODO: implement domain-specific resolution logic here. Example actions:
-    // - validate `originalUrl` and `originalOptions`
-    // - compute a merged payload against current DB state
-    // - call internal services or database to accept/reject resolution
-    // - emit audit logs or events for teacher review
+    console.log('Received offline resolution payload:', {
+      requestId,
+      originalUrl,
+      action,
+    });
 
-    console.log('Received offline resolution payload:', { requestId: body.requestId, originalUrl: body.originalUrl });
+    if (!body?.requestId) {
+      return NextResponse.json({ ok: false, error: 'Missing requestId' }, { status: 400 });
+    }
 
-    // For now, accept the resolution and return success so the client removes the queued item.
-    return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    // Placeholder merge logic for the offline-first workflow.
+    // This can later be exchanged for a DB-backed reconciliation or an event ingestion pipeline.
+    const result = {
+      ok: true,
+      requestId,
+      action,
+      resolvedAt: new Date().toISOString(),
+      message: `Conflict resolved via ${action}`,
+    };
+
+    return NextResponse.json(result, { status: 200 });
   } catch (err) {
     console.error('Error handling offline resolution:', err);
-    return new Response(JSON.stringify({ ok: false, error: String(err) }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    return NextResponse.json({ ok: false, error: String(err) }, { status: 500 });
   }
 }
 

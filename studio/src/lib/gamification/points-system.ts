@@ -10,8 +10,8 @@
  * - Subject mastery (all competencies in subject mastered = 100 points)
  */
 
-import { supabase } from './supabase/client';
-import type { DifficultyLevel } from './adaptive-difficulty';
+import { supabase } from '../supabase/client';
+import type { DifficultyLevel } from '../adaptive-difficulty';
 
 export interface PointsBreakdown {
   basePoints: number;

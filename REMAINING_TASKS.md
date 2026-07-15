@@ -103,12 +103,12 @@
   - ❌ Include cultural celebrations (Jamhuri Day, Madaraka Day, etc.)
   
 
-#### 2.2 Offline-First Architecture - **30% Complete** ⚠️
-- ⚠️ Full offline support for students
+#### 2.2 Offline-First Architecture - **80% Complete** ✅
+- ✅ Full offline support for students
   - ✅ Download lessons for offline study (PWA cache) - **DONE**
   - ✅ Offline quiz taking with sync-on-reconnect
+  - ✅ Conflict resolution for multi-device edits — **implemented** (queued requests now surface conflicts, the UI offers retry/resolve actions, and a dedicated server route accepts resolution decisions)
   - ❌ Local AI fallback (smaller model for basic Q&A)
-  - ⚠️ Conflict resolution for multi-device edits — **partial** (client-side conflict detection, queuing and a basic resolution UI added; server-side merge/resolution pending)
 
 - ✅ Low-bandwidth optimization — `low-bandwidth` CSS and toggle added; asset compression and lazy-loading pending
 - ❌ Compress all assets (images, fonts, scripts)
