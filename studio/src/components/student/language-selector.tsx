@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Languages, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-export type SupportedLanguage = 'english' | 'kiswahili' | 'kikuyu';
+export type SupportedLanguage = 'english' | 'kiswahili' | 'mixed';
 
 interface LanguageOption {
   code: SupportedLanguage;
@@ -35,10 +35,10 @@ const LANGUAGES: LanguageOption[] = [
     flag: '🇰🇪',
   },
   {
-    code: 'kikuyu',
-    name: 'Kikuyu',
-    nativeName: 'Gĩkũyũ',
-    flag: '🇰🇪',
+    code: 'mixed',
+    name: 'Mixed',
+    nativeName: 'English + Kiswahili',
+    flag: '🌍',
   },
 ];
 
@@ -59,6 +59,10 @@ export function LanguageSelector({
   const [isChanging, setIsChanging] = useState(false);
 
   const currentLang = LANGUAGES.find((lang) => lang.code === currentLanguage) || LANGUAGES[0];
+
+  function isSupportedLanguage(language: string): language is SupportedLanguage {
+    return LANGUAGES.some((lang) => lang.code === language as SupportedLanguage);
+  }
 
   const handleLanguageChange = async (language: SupportedLanguage) => {
     if (language === currentLanguage) return;
@@ -90,11 +94,11 @@ export function LanguageSelector({
 
   // Load saved preference on mount
   useEffect(() => {
-    const saved = localStorage.getItem('preferredLanguage') as SupportedLanguage;
-    if (saved && saved !== currentLanguage) {
+    const saved = localStorage.getItem('preferredLanguage');
+    if (saved && saved !== currentLanguage && isSupportedLanguage(saved)) {
       onLanguageChange(saved);
     }
-  }, []);
+  }, [currentLanguage]);
 
   if (variant === 'badge') {
     return (
@@ -163,17 +167,17 @@ function getTranslation(key: string, language: SupportedLanguage): string {
     languageChanged: {
       english: 'Language Changed',
       kiswahili: 'Lugha Imebadilishwa',
-      kikuyu: 'Rũthiomi Rũgarũrĩtwo',
+      mixed: 'Language Changed',
     },
     welcome: {
       english: 'Welcome',
       kiswahili: 'Karibu',
-      kikuyu: 'Wĩra Mwega',
+      mixed: 'Welcome',
     },
     loading: {
       english: 'Loading...',
       kiswahili: 'Inapakia...',
-      kikuyu: 'Kũhithia...',
+      mixed: 'Loading...',
     },
   };
 

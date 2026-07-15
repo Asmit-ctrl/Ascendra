@@ -7,6 +7,23 @@ from ..core.models import AgentRequest, AgentResponse
 from ..core.logging import AgentLogger
 from ..agents.assessment import AssessmentAgent
 from ..agents.tutoring import TutoringAgent
+from ..agents.specialists import (
+    CareerPathwaysAgent,
+    CurriculumAgent,
+    SchoolIntelligenceAgent,
+)
+from ..agents.future_agents import (
+    CoordinatorAgent,
+    CredentialVerificationAgent,
+    CreativityInnovationAgent,
+    CulturalLocalizationAgent,
+    EquityInclusionAgent,
+    MasteryAgent,
+    PersonaMotivationAgent,
+    RealWorldProblemSolverAgent,
+    SELAgent,
+    TeacherSupportAgent,
+)
 from .workflow import LangGraphOrchestrator
 from .failure_recovery import FailureRecoveryManager
 
@@ -33,9 +50,9 @@ class SyncSentaOrchestrator:
             # Initialize LangGraph workflow
             self.workflow_orchestrator = LangGraphOrchestrator()
 
-            # Register implemented worker agents. Other agents (CBC,
-            # Intelligence, Career) fall through to placeholder
-            # responses in the workflow until their migration completes.
+            # Register implemented worker agents and specialist wrappers.
+            # CBC, Intelligence, and Career pathways are now backed by
+            # concrete agent adapters instead of placeholder fallbacks.
             self.workflow_orchestrator.register_agent(
                 "assessment", AssessmentAgent()
             )
@@ -53,6 +70,45 @@ class SyncSentaOrchestrator:
             from ..agents.lesson_architect import LessonArchitectAgent
             self.workflow_orchestrator.register_agent(
                 "lesson_architect", LessonArchitectAgent(supabase_client=supabase)
+            )
+            self.workflow_orchestrator.register_agent(
+                "cbc_curriculum", CurriculumAgent(supabase_client=supabase)
+            )
+            self.workflow_orchestrator.register_agent(
+                "school_intelligence", SchoolIntelligenceAgent(supabase_client=supabase)
+            )
+            self.workflow_orchestrator.register_agent(
+                "career_pathways", CareerPathwaysAgent(supabase_client=supabase)
+            )
+            self.workflow_orchestrator.register_agent(
+                "cultural_localization", CulturalLocalizationAgent()
+            )
+            self.workflow_orchestrator.register_agent(
+                "equity_inclusion", EquityInclusionAgent()
+            )
+            self.workflow_orchestrator.register_agent(
+                "persona_motivation", PersonaMotivationAgent()
+            )
+            self.workflow_orchestrator.register_agent(
+                "mastery", MasteryAgent()
+            )
+            self.workflow_orchestrator.register_agent(
+                "creativity_innovation", CreativityInnovationAgent()
+            )
+            self.workflow_orchestrator.register_agent(
+                "sel", SELAgent()
+            )
+            self.workflow_orchestrator.register_agent(
+                "real_world_problem_solver", RealWorldProblemSolverAgent()
+            )
+            self.workflow_orchestrator.register_agent(
+                "teacher_support", TeacherSupportAgent()
+            )
+            self.workflow_orchestrator.register_agent(
+                "credential_verification", CredentialVerificationAgent()
+            )
+            self.workflow_orchestrator.register_agent(
+                "coordinator", CoordinatorAgent()
             )
 
             self._initialized = True

@@ -266,6 +266,19 @@ export function InteractiveSandbox({
   const hover = useRef<{ target: string | null; enteredAt: number }>({ target: null, enteredAt: 0 })
   const [eventCount, setEventCount] = useState(0)
 
+  const tokensInZone = useMemo(
+    () => tokens.filter((token) => inDropZone(token)),
+    [tokens],
+  )
+  const currentAnswerValue = useMemo(
+    () => tokensInZone.reduce((sum, token) => sum + token.value, 0),
+    [tokensInZone],
+  )
+  const currentAnswerLabel = useMemo(
+    () => tokensInZone.map((token) => token.label).join(' + ') || '(empty)',
+    [tokensInZone],
+  )
+
   const resolvedStudentId =
     studentId ||
     (typeof window !== 'undefined' && (localStorage.getItem('studentId') || localStorage.getItem('userId'))) ||
@@ -488,6 +501,8 @@ export function InteractiveSandbox({
     undoStack.current.push(JSON.parse(JSON.stringify(tokens)))
     setTokens(makeInitialTokens(activityType))
     setFeedback(null)
+    events.current = []
+    setEventCount(0)
   }
 
   /**
@@ -620,14 +635,14 @@ export function InteractiveSandbox({
   return (
     <Card className="w-full">
       <CardHeader>
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
             <CardTitle className="text-lg">{activeQuestion}</CardTitle>
             <p className="text-sm text-muted-foreground mt-1">
               {grade} • {subject} • {competency}
             </p>
           </div>
-          <div className="flex flex-col items-end gap-1">
+          <div className="flex flex-col items-start gap-2 text-sm text-muted-foreground md:items-end">
             {lessonVariations.length > 1 && (
               <Badge variant="secondary" className="gap-1">
                 Question {variationIndex + 1} of {lessonVariations.length}
@@ -639,22 +654,58 @@ export function InteractiveSandbox({
               {eventCount} signals
             </Badge>
             <span className="text-xs text-muted-foreground">
-              {sessionId.slice(-8)}
+              Session {sessionId.slice(-8)}
             </span>
           </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="relative">
-          <canvas
-            ref={canvasRef}
-            className="w-full h-[280px] border border-border rounded-lg bg-background touch-none"
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerCancel={onPointerUp}
-            onPointerLeave={onPointerLeave}
-          />
+        <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+          Drag tokens from the canvas into the answer box on the right. The sandbox checks the sum of tokens inside the drop zone and grades your answer when you submit.
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-[1.7fr_0.9fr]">
+          <div className="relative">
+            <canvas
+              ref={canvasRef}
+              className="w-full h-[300px] rounded-2xl border border-border bg-background touch-none"
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerCancel={onPointerUp}
+              onPointerLeave={onPointerLeave}
+            />
+          </div>
+
+          <div className="rounded-2xl border border-border bg-surface p-4 text-sm text-muted-foreground">
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.16em] text-primary">Current answer</p>
+                <p className="mt-2 text-lg font-semibold text-foreground">
+                  {currentAnswerLabel}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Value: {currentAnswerValue.toFixed(3)}
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-muted p-3">
+                <p className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
+                  Drop zone details
+                </p>
+                <p className="mt-2 text-sm">
+                  Tokens are accepted when their center lands inside the gray box. You can move them back out to change your answer.
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-muted p-3">
+                <p className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Tip</p>
+                <p className="mt-2 text-sm">
+                  Submit when the answer box shows the quantity you want. If you need a fresh start, use Clear.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-2">

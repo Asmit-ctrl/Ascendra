@@ -55,12 +55,13 @@ export async function updateLearningProgress(
   }
 ): Promise<void> {
   // Check if progress record exists
-  const { data: existing } = await supabase
+  const existingRes = await supabase
     .from('learning_progress')
     .select('*')
     .eq('user_id', userId)
     .eq('competency_code', competencyCode)
     .single();
+  const existing = existingRes.data as any | null;
 
   if (existing) {
     // Update existing record
@@ -160,14 +161,16 @@ export async function getLearningProgress(
     query = query.eq('subject', subject);
   }
 
-  const { data, error } = await query;
+  const queryRes = await query;
+  const data = queryRes.data as any[] | null;
+  const error = queryRes.error;
 
   if (error) {
     console.error('Error fetching learning progress:', error);
     throw error;
   }
 
-  return data.map((item) => ({
+  return (data || []).map((item: any) => ({
     competencyCode: item.competency_code,
     competencyName: item.competency_name,
     subject: item.subject,
@@ -197,12 +200,13 @@ export async function updateDailyActivity(
   const today = new Date().toISOString().split('T')[0];
 
   // Check if record exists for today
-  const { data: existing } = await supabase
+  const existingRes = await supabase
     .from('daily_activity')
     .select('*')
     .eq('user_id', userId)
     .eq('activity_date', today)
     .single();
+  const existing = existingRes.data as any | null;
 
   if (existing) {
     // Update existing record
@@ -210,16 +214,17 @@ export async function updateDailyActivity(
       ? Array.from(new Set([...(existing.subjects_practiced || []), ...updates.subjectsPracticed]))
       : existing.subjects_practiced;
 
-    const { error } = await supabase
-      .from('daily_activity')
-      .update({
-        messages_sent: existing.messages_sent + (updates.messagesSent || 0),
-        sessions_started: existing.sessions_started + (updates.sessionsStarted || 0),
-        time_spent_minutes: existing.time_spent_minutes + (updates.timeSpentMinutes || 0),
-        subjects_practiced: newSubjects,
-      })
-      .eq('user_id', userId)
-      .eq('activity_date', today);
+    const updRes = await supabase
+        .from('daily_activity')
+        .update({
+          messages_sent: (existing?.messages_sent || 0) + (updates.messagesSent || 0),
+          sessions_started: (existing?.sessions_started || 0) + (updates.sessionsStarted || 0),
+          time_spent_minutes: (existing?.time_spent_minutes || 0) + (updates.timeSpentMinutes || 0),
+          subjects_practiced: newSubjects,
+        })
+        .eq('user_id', userId)
+        .eq('activity_date', today);
+    const { error } = updRes as any;
 
     if (error) throw error;
   } else {
@@ -227,7 +232,7 @@ export async function updateDailyActivity(
     const streak = await calculateStreak(userId);
 
     // Create new record
-    const { error } = await supabase
+    const insertRes = await supabase
       .from('daily_activity')
       .insert({
         user_id: userId,
@@ -238,6 +243,7 @@ export async function updateDailyActivity(
         subjects_practiced: updates.subjectsPracticed || [],
         daily_streak: streak,
       });
+    const { error } = insertRes as any;
 
     if (error) throw error;
 
@@ -256,13 +262,14 @@ export async function updateDailyActivity(
  * Calculate current streak
  */
 async function calculateStreak(userId: string): Promise<number> {
-  const { data, error } = await supabase
+  const streakRes = await supabase
     .from('daily_activity')
     .select('activity_date, daily_streak')
     .eq('user_id', userId)
     .order('activity_date', { ascending: false })
     .limit(2);
-
+  const data = (streakRes as any).data as any[] | null;
+  const error = (streakRes as any).error;
   if (error || !data || data.length === 0) return 1;
 
   const today = new Date().toISOString().split('T')[0];
@@ -291,19 +298,19 @@ export async function awardAchievement(
   metadata?: Record<string, any>
 ): Promise<void> {
   // Check if achievement already awarded
-  const { data: existing } = await supabase
+  const existingRes = await supabase
     .from('achievements')
     .select('id')
     .eq('user_id', userId)
     .eq('achievement_type', achievementType)
     .single();
-
+  const existing = existingRes.data as any | null;
   if (existing) return; // Already awarded
 
   // Get achievement details
   const achievementDetails = getAchievementDetails(achievementType, metadata);
 
-  const { error } = await supabase
+  const insertRes = await supabase
     .from('achievements')
     .insert({
       user_id: userId,
@@ -312,7 +319,7 @@ export async function awardAchievement(
       achievement_description: achievementDetails.description,
       badge_icon: achievementDetails.icon,
     });
-
+  const { error } = insertRes as any;
   if (error) {
     console.error('Error awarding achievement:', error);
     throw error;
@@ -375,10 +382,11 @@ function getAchievementDetails(
  * Get student statistics
  */
 export async function getStudentStats(userId: string): Promise<StudentStats> {
-  const { data, error } = await supabase.rpc('get_user_stats', {
+  const statsRes = await supabase.rpc('get_user_stats', {
     p_user_id: userId,
-  });
-
+  }) as any;
+  const data = statsRes.data as any[] | null;
+  const error = statsRes.error;
   if (error) {
     console.error('Error fetching student stats:', error);
     throw error;
@@ -410,18 +418,18 @@ export async function getStudentStats(userId: string): Promise<StudentStats> {
  * Get achievements for a user
  */
 export async function getAchievements(userId: string): Promise<Achievement[]> {
-  const { data, error } = await supabase
+  const achRes = await supabase
     .from('achievements')
     .select('*')
     .eq('user_id', userId)
-    .order('earned_at', { ascending: false });
-
+    .order('earned_at', { ascending: false }) as any;
+  const data = achRes.data as any[] | null;
+  const error = achRes.error;
   if (error) {
     console.error('Error fetching achievements:', error);
     throw error;
   }
-
-  return data;
+  return data || [];
 }
 
 /**
@@ -430,19 +438,19 @@ export async function getAchievements(userId: string): Promise<Achievement[]> {
 export async function getSubjectProgressSummary(
   userId: string
 ): Promise<Record<string, { mastered: number; proficient: number; developing: number; emerging: number }>> {
-  const { data, error } = await supabase
+  const lpRes = await supabase
     .from('learning_progress')
     .select('subject, mastery_level')
-    .eq('user_id', userId);
-
+    .eq('user_id', userId) as any;
+  const data = lpRes.data as any[] | null;
+  const error = lpRes.error;
   if (error) {
     console.error('Error fetching subject progress:', error);
     throw error;
   }
 
   const summary: Record<string, any> = {};
-
-  data.forEach((item) => {
+  (data || []).forEach((item: any) => {
     if (!summary[item.subject]) {
       summary[item.subject] = {
         mastered: 0,

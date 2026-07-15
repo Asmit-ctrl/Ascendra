@@ -49,11 +49,19 @@ import {
   clearHistory,
   type StoredChatMessage,
 } from '@/lib/socratic-history';
+import {
+  addChatMessage,
+  createChatSession,
+  getChatSessions,
+  migrateLocalStorageHistory,
+} from '@/lib/chat-history-supabase';
 import { tutorIntroMessage } from '@/lib/grade-greetings';
 import { useWebSpeech } from '@/hooks/use-web-speech';
+import { useAuth } from '@/hooks/use-auth';
 import { CallInterface } from '@/components/voice/call-interface';
 
 export type ChatLanguage = 'english' | 'kiswahili' | 'mixed';
+export type ChatMode = 'socratic' | 'compass' | 'homework-help';
 
 export interface SocraticChatProps {
   studentId: string;
@@ -61,6 +69,9 @@ export interface SocraticChatProps {
   grade: string;
   subject: string;
   language?: ChatLanguage;
+  mode?: ChatMode;
+  /** Optional competency code to prime the chat for a specific topic */
+  competencyCode?: string;
   /** When provided, switches to Compass mode (teacher-context grounded). */
   teacherContext?: string;
 }
@@ -141,6 +152,8 @@ export function SocraticChat({
   grade,
   subject,
   language = 'mixed',
+  mode = 'socratic',
+  competencyCode,
   teacherContext,
 }: SocraticChatProps) {
   // Conversation state. The `intro` message is a *display-only* placeholder
@@ -152,15 +165,22 @@ export function SocraticChat({
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [chatSessionId, setChatSessionId] = useState<string | null>(null);
+  const [hasLoadedRemoteHistory, setHasLoadedRemoteHistory] = useState(false);
 
+  const { user } = useAuth();
+  const hydratedRef = useRef(false);
+  const migratedRef = useRef(false);
   const scrollAreaRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
+  const activeStudentId = user?.id ?? studentId;
+  const isAuthenticated = Boolean(user?.id);
+
   // Did we already attempt a load? Used to gate writes — don't save until
   // we've finished restoring, or we risk overwriting good storage with the
   // placeholder intro.
-  const hydratedRef = useRef(false);
 
   // ---- Voice I/O ---------------------------------------------------------
   // The hook is used here ONLY for auto-speak (TTS) of typed-mode replies
@@ -197,38 +217,105 @@ export function SocraticChat({
   // (Push-to-talk-into-textarea was removed when the mic button became a
   // "Call" button. The CallInterface owns its own STT loop now.)
 
-  // ---- Hydrate from localStorage on mount or when key fields change -------
+  // ---- Hydrate from Supabase / localStorage on mount or when key fields change -------
   useEffect(() => {
     hydratedRef.current = false;
-    if (!studentId || !subject) return;
+    if (!subject || !activeStudentId) return;
 
-    const stored = loadHistory(studentId, subject);
-    if (stored.length > 0) {
-      setMessages(
-        stored.map((m) => ({
-          id: makeId(),
-          role: m.role,
-          content: m.content,
-        }))
-      );
-    } else {
-      setMessages([introMessage({ studentName, subject, grade, teacherContext })]);
+    let cancelled = false;
+
+    async function hydrateHistory() {
+      if (user?.id) {
+        try {
+          const sessions = await getChatSessions(user.id, subject, 1);
+          if (cancelled) return;
+
+          if (sessions.length > 0 && sessions[0].messages.length > 0) {
+            setMessages(
+              sessions[0].messages.map((message) => ({
+                id: makeId(),
+                role: message.role === 'assistant' ? 'assistant' : 'user',
+                content: message.content,
+              }))
+            );
+            setChatSessionId(sessions[0].id);
+          } else {
+            const stored = loadHistory(studentId, subject);
+            if (stored.length > 0) {
+              setMessages(
+                stored.map((m) => ({
+                  id: makeId(),
+                  role: m.role,
+                  content: m.content,
+                }))
+              );
+            } else {
+              setMessages([introMessage({ studentName, subject, grade, teacherContext })]);
+            }
+          }
+
+          if (!migratedRef.current) {
+            migratedRef.current = true;
+            migrateLocalStorageHistory(user.id, grade).catch((err) => {
+              console.error('Failed to migrate local chat history to Supabase:', err);
+            });
+          }
+        } catch (err) {
+          console.error('Error loading chat history from Supabase:', err);
+          const stored = loadHistory(studentId, subject);
+          if (stored.length > 0) {
+            setMessages(
+              stored.map((m) => ({
+                id: makeId(),
+                role: m.role,
+                content: m.content,
+              }))
+            );
+          } else {
+            setMessages([introMessage({ studentName, subject, grade, teacherContext })]);
+          }
+        }
+      } else {
+        const stored = loadHistory(studentId, subject);
+        if (stored.length > 0) {
+          setMessages(
+            stored.map((m) => ({
+              id: makeId(),
+              role: m.role,
+              content: m.content,
+            }))
+          );
+        } else {
+          setMessages([introMessage({ studentName, subject, grade, teacherContext })]);
+        }
+      }
+
+      if (!cancelled) {
+        hydratedRef.current = true;
+        setHasLoadedRemoteHistory(true);
+      }
     }
-    hydratedRef.current = true;
-  }, [studentId, subject, studentName, grade, teacherContext]);
+
+    hydrateHistory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeStudentId, grade, subject, studentId, studentName, teacherContext, user?.id]);
 
   // ---- Persist on every committed change ----------------------------------
   // Skip the intro placeholder; only persist real turns.
   useEffect(() => {
-    if (!hydratedRef.current) return;
+    if (!hydratedRef.current || !hasLoadedRemoteHistory) return;
     if (!studentId || !subject) return;
+    if (isAuthenticated) return;
 
     const persistable: StoredChatMessage[] = messages
       .filter((m) => m.id !== 'intro' && !m.streaming && m.content.trim().length > 0)
       .map((m) => ({ role: m.role, content: m.content }));
 
     saveHistory(studentId, subject, persistable);
-  }, [messages, studentId, subject]);
+  }, [messages, studentId, subject, isAuthenticated]);
 
   // ---- Auto-speak the latest completed assistant message ------------------
   // Trigger conditions: speakEnabled, TTS supported, message has finished
@@ -282,11 +369,27 @@ export function SocraticChat({
   const newConversation = useCallback(() => {
     abortRef.current?.abort();
     clearHistory(studentId, subject);
+    setChatSessionId(null);
     setMessages([introMessage({ studentName, subject, grade, teacherContext })]);
     setInput('');
     setError(null);
     setBusy(false);
   }, [studentId, subject, studentName, grade, teacherContext]);
+
+  const ensureChatSession = useCallback(async (): Promise<string | null> => {
+    if (!user?.id) return null;
+    if (chatSessionId) return chatSessionId;
+
+    const sessionId = await createChatSession(
+      user.id,
+      subject,
+      grade,
+      teacherContext ? 'compass' : 'socratic',
+      teacherContext,
+    );
+    setChatSessionId(sessionId);
+    return sessionId;
+  }, [chatSessionId, grade, subject, teacherContext, user?.id]);
 
   const send = useCallback(
     async (rawText: string, source: 'voice' | 'text' = 'text'): Promise<string> => {
@@ -330,6 +433,20 @@ export function SocraticChat({
       const controller = new AbortController();
       abortRef.current = controller;
 
+      let sessionId: string | null = null;
+      if (user?.id) {
+        try {
+          sessionId = await ensureChatSession();
+          if (sessionId) {
+            addChatMessage(sessionId, user.id, 'user', text).catch((err) => {
+              console.error('Failed to persist user chat message to Supabase:', err);
+            });
+          }
+        } catch (err) {
+          console.error('Failed to ensure chat session:', err);
+        }
+      }
+
       let res: Response;
       try {
         res = await fetch('/api/chat', {
@@ -343,8 +460,11 @@ export function SocraticChat({
             subject,
             language,
             studentName,
-            mode: teacherContext ? 'compass' : 'socratic',
+            mode,
             teacherContext,
+            competencyCode,
+            sessionId,
+            adaptiveDifficultyEnabled: true,
           }),
         });
       } catch (err) {
@@ -487,12 +607,21 @@ export function SocraticChat({
             : m
         )
       );
+
+      if (!stoppedByUser && sessionId) {
+        addChatMessage(sessionId, user?.id ?? activeStudentId, 'assistant', content, {
+          model: 'groq',
+        }).catch((err) => {
+          console.error('Failed to persist assistant chat message to Supabase:', err);
+        });
+      }
+
       setBusy(false);
       // Return the speakable content (without [CHOICE: ...] tokens) so the
       // call UI can hand it to TTS. Empty string when stopped early.
       return stoppedByUser ? '' : content;
     },
-    [busy, grade, language, messages, studentName, subject, teacherContext]
+    [activeStudentId, busy, ensureChatSession, grade, language, messages, studentName, subject, teacherContext, user?.id]
   );
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

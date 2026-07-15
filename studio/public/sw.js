@@ -122,14 +122,25 @@ self.addEventListener('fetch', (event) => {
 
 // Background sync for offline messages (future enhancement)
 self.addEventListener('sync', (event) => {
-  if (event.tag === 'sync-messages') {
-    event.waitUntil(syncMessages());
+  if (event.tag === 'offline-queue-sync') {
+    event.waitUntil(syncQueuedRequests());
   }
 });
 
-async function syncMessages() {
-  // TODO: Implement message sync when back online
-  console.log('[SW] Syncing offline messages');
+self.addEventListener('message', (event) => {
+  if (!event.data) return;
+  if (event.data.type === 'PING_SW') {
+    event.source?.postMessage({ type: 'PONG_SW' });
+  }
+});
+
+async function syncQueuedRequests() {
+  console.log('[SW] Offline queue sync event triggered');
+
+  const clientList = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+  for (const client of clientList) {
+    client.postMessage({ type: 'OFFLINE_QUEUE_SYNC' });
+  }
 }
 
 // Push notifications (future enhancement)

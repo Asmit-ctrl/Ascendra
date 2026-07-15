@@ -380,6 +380,88 @@ export interface Database {
           updated_at?: string;
         };
       };
+      agent_keys: {
+        Row: {
+          id: string;
+          agent_id: string;
+          name: string;
+          secret_key: string;
+          public_key: string | null;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          agent_id: string;
+          name: string;
+          secret_key: string;
+          public_key?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          agent_id?: string;
+          name?: string;
+          secret_key?: string;
+          public_key?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      agent_traces: {
+        Row: {
+          id: string;
+          trace_id: string;
+          agent_id: string;
+          session_id: string | null;
+          user_id: string | null;
+          input: Json;
+          prompt: string;
+          model: string;
+          output: Json;
+          confidence: number | null;
+          signed_hash: string;
+          signature: string;
+          metadata: Json | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          trace_id: string;
+          agent_id: string;
+          session_id?: string | null;
+          user_id?: string | null;
+          input: Json;
+          prompt: string;
+          model: string;
+          output: Json;
+          confidence?: number | null;
+          signed_hash: string;
+          signature: string;
+          metadata?: Json | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          trace_id?: string;
+          agent_id?: string;
+          session_id?: string | null;
+          user_id?: string | null;
+          input?: Json;
+          prompt?: string;
+          model?: string;
+          output?: Json;
+          confidence?: number | null;
+          signed_hash?: string;
+          signature?: string;
+          metadata?: Json | null;
+          created_at?: string;
+        };
+      };
     };
     Views: {
       [_ in never]: never;

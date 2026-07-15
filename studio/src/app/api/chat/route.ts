@@ -1,60 +1,45 @@
 /**
- * POST /api/chat
+ * POST /api/chat - Enhanced Version
  *
- * Streams a Socratic Mentor response from Groq back to the browser as
- * Server-Sent Events (SSE). The browser parses these into incremental tokens
- * and renders them in the chat panel.
+ * Streams a Socratic Mentor response from Groq with:
+ * - Supabase authentication and user profile lookup
+ * - Distributed rate limiting via Upstash Redis
+ * - Chat history persistence to database
+ * - Progress tracking and analytics
+ * - Usage logging for billing/monitoring
  *
- * Mode 'socratic' uses buildSocraticSystemPrompt; mode 'compass' uses
- * buildCompassSystemPrompt with the supplied teacherContext.
- *
- * Guardrails:
- *   - 30 s timeout on the upstream Groq call (AbortSignal.timeout).
- *   - Inbound history truncated to MAX_HISTORY_TURNS (defence in depth — the
- *     client also caps, but a malicious client could lie).
- *   - In-memory per-IP token-bucket rate limit (see lib/rate-limit.ts for
- *     honest limitations).
- *
- * Errors return JSON with the appropriate status — we deliberately do NOT
- * fall back to canned text. A broken backend should be visibly broken.
+ * This is the production-ready version that replaces the original route.ts
+ * To use: rename this file to route.ts and backup the original.
  */
 
-import { NextRequest } from "next/server";
-import Groq from "groq-sdk";
-import { z } from "zod";
+import { NextRequest } from 'next/server';
+import Groq from 'groq-sdk';
+import { z } from 'zod';
 import {
   buildSocraticSystemPrompt,
   buildCompassSystemPrompt,
-} from "@/lib/socratic-prompts";
-import { capHistory } from "@/lib/socratic-history";
-import { rateLimit } from "@/lib/rate-limit";
+} from '@/lib/socratic-prompts';
+import { checkChatRateLimit } from '@/lib/rate-limit-upstash';
+import { getSupabaseServerClient } from '@/lib/supabase/server';
+import { addChatMessage, createChatSession } from '@/lib/chat-history-supabase';
+import { updateDailyActivity, updateLearningProgress } from '@/lib/progress-tracking';
 
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 // ──────────────────────────────────────────────────────────────────────────
 // Tunables
 // ──────────────────────────────────────────────────────────────────────────
 
-/** Upstream timeout. Groq is usually < 5 s; 30 s catches the long tail. */
 const GROQ_TIMEOUT_MS = 30_000;
-
-/** Hard cap on inbound history turns. Matches the persistence cap. */
 const MAX_HISTORY_TURNS = 40;
-
-/**
- * Burst: 30 messages allowed in a tight burst per IP.
- * Sustained: ~1 message every 2 seconds long-term (0.5 / sec).
- * These are per-process — see lib/rate-limit.ts for caveats on Vercel.
- */
-const RATE_LIMIT = { capacity: 30, refillPerSec: 0.5 };
 
 // ──────────────────────────────────────────────────────────────────────────
 // Validation
 // ──────────────────────────────────────────────────────────────────────────
 
 const HistoryEntry = z.object({
-  role: z.enum(["user", "assistant"]),
+  role: z.enum(['user', 'assistant']),
   content: z.string().min(1).max(4000),
 });
 
@@ -63,25 +48,17 @@ const ChatRequest = z.object({
   history: z.array(HistoryEntry).max(MAX_HISTORY_TURNS * 2).default([]),
   grade: z.string().min(1).max(40),
   subject: z.string().min(1).max(80),
-  language: z.enum(["english", "kiswahili", "mixed"]).default("mixed"),
+  language: z.enum(['english', 'kiswahili', 'mixed']).default('mixed'),
   studentName: z.string().max(80).optional(),
-  mode: z.enum(["socratic", "compass"]).default("socratic"),
+  mode: z.enum(['socratic', 'compass']).default('socratic'),
   teacherContext: z.string().max(20000).optional(),
+  sessionId: z.string().uuid().optional(), // For continuing existing sessions
+  competencyCode: z.string().optional(), // For progress tracking
 });
 
 // ──────────────────────────────────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────────────────────────────────
-
-function clientKey(req: NextRequest): string {
-  // Vercel sets x-forwarded-for; fall back to a constant so local dev still
-  // exercises the limiter (rather than skipping it entirely).
-  const fwd = req.headers.get("x-forwarded-for");
-  if (fwd) return fwd.split(",")[0]!.trim();
-  const real = req.headers.get("x-real-ip");
-  if (real) return real;
-  return "local";
-}
 
 function sseError(message: string, detail?: string): string {
   const payload = detail ? { error: message, detail } : { error: message };
@@ -93,20 +70,61 @@ function sseError(message: string, detail?: string): string {
 // ──────────────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
-  // ---- Rate limit (cheap; runs before parsing) ------------------------------
-  const ip = clientKey(req);
-  const decision = rateLimit(`chat:${ip}`, RATE_LIMIT);
-  if (!decision.allowed) {
+  const startTime = Date.now();
+
+  // ---- Authentication -------------------------------------------------------
+  const supabase = getSupabaseServerClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return Response.json(
+      { error: 'Unauthorized', detail: 'Please sign in to continue' },
+      { status: 401 }
+    );
+  }
+
+  // Get user profile for subscription tier
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('subscription_tier, grade, full_name')
+    .eq('id', user.id)
+    .single();
+
+  if (!profile) {
+    return Response.json(
+      { error: 'Profile not found', detail: 'Please complete your profile' },
+      { status: 400 }
+    );
+  }
+
+  // ---- Rate limiting --------------------------------------------------------
+  const rateLimitResult = await checkChatRateLimit(
+    user.id,
+    profile.subscription_tier as 'free' | 'premium' | 'school'
+  );
+
+  if (!rateLimitResult.success) {
     return Response.json(
       {
-        error: "Too many requests",
-        detail: `Try again in ${decision.retryAfterSec}s.`,
+        error: 'Rate limit exceeded',
+        detail: `You've reached your daily limit. ${
+          profile.subscription_tier === 'free'
+            ? 'Upgrade to Premium for unlimited messages.'
+            : `Try again in ${rateLimitResult.reset} seconds.`
+        }`,
+        remaining: rateLimitResult.remaining,
+        limit: rateLimitResult.limit,
+        reset: rateLimitResult.reset,
       },
       {
         status: 429,
         headers: {
-          "Retry-After": String(decision.retryAfterSec),
-          "X-RateLimit-Remaining": "0",
+          'Retry-After': String(rateLimitResult.reset),
+          'X-RateLimit-Remaining': String(rateLimitResult.remaining),
+          'X-RateLimit-Limit': String(rateLimitResult.limit),
         },
       }
     );
@@ -118,16 +136,13 @@ export async function POST(req: NextRequest) {
     const json = await req.json();
     body = ChatRequest.parse(json);
   } catch (err) {
-    const detail = err instanceof Error ? err.message : "Invalid JSON";
-    return Response.json(
-      { error: "Invalid request body", detail },
-      { status: 400 }
-    );
+    const detail = err instanceof Error ? err.message : 'Invalid JSON';
+    return Response.json({ error: 'Invalid request body', detail }, { status: 400 });
   }
 
-  if (body.mode === "compass" && !body.teacherContext) {
+  if (body.mode === 'compass' && !body.teacherContext) {
     return Response.json(
-      { error: "Compass mode requires teacherContext" },
+      { error: 'Compass mode requires teacherContext' },
       { status: 400 }
     );
   }
@@ -137,46 +152,66 @@ export async function POST(req: NextRequest) {
   if (!apiKey) {
     return Response.json(
       {
-        error: "Server is missing GROQ_API_KEY",
-        detail:
-          "Set GROQ_API_KEY in your environment (Vercel project settings for prod).",
+        error: 'Server is missing GROQ_API_KEY',
+        detail: 'Set GROQ_API_KEY in your environment.',
       },
       { status: 500 }
     );
   }
-  const model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+  const model = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+
+  // ---- Create or get session ------------------------------------------------
+  let sessionId = body.sessionId;
+  if (!sessionId) {
+    try {
+      sessionId = await createChatSession(
+        user.id,
+        body.subject,
+        body.grade,
+        body.mode,
+        body.teacherContext
+      );
+    } catch (error) {
+      console.error('Failed to create chat session:', error);
+      // Continue without session (degraded mode)
+    }
+  }
+
+  // ---- Save user message ----------------------------------------------------
+  if (sessionId) {
+    try {
+      await addChatMessage(sessionId, user.id, 'user', body.message);
+    } catch (error) {
+      console.error('Failed to save user message:', error);
+    }
+  }
 
   // ---- Build messages -------------------------------------------------------
   const systemPrompt =
-    body.mode === "compass"
+    body.mode === 'compass'
       ? buildCompassSystemPrompt({
           teacherContext: body.teacherContext!,
           language: body.language,
-          studentName: body.studentName,
+          studentName: body.studentName || profile.full_name || undefined,
         })
       : buildSocraticSystemPrompt({
           grade: body.grade,
           subject: body.subject,
           language: body.language,
-          studentName: body.studentName,
+          studentName: body.studentName || profile.full_name || undefined,
         });
 
-  // Defence in depth: cap server-side even though the client also trims.
-  const trimmedHistory = capHistory(body.history, MAX_HISTORY_TURNS);
+  // Cap history
+  const trimmedHistory = body.history.slice(-MAX_HISTORY_TURNS * 2);
 
-  const messages: { role: "system" | "user" | "assistant"; content: string }[] =
-    [
-      { role: "system", content: systemPrompt },
-      ...trimmedHistory,
-      { role: "user", content: body.message },
-    ];
+  const messages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
+    { role: 'system', content: systemPrompt },
+    ...trimmedHistory,
+    { role: 'user', content: body.message },
+  ];
 
   // ---- Call Groq (streaming, with timeout) ----------------------------------
   const groq = new Groq({ apiKey });
-
-  // AbortSignal.timeout is available on Node 18+ — Vercel's runtime is fine.
-  // If the SDK doesn't honour signal natively for every version, our stream
-  // loop will still bail out when the connection drops.
   const timeoutSignal = AbortSignal.timeout(GROQ_TIMEOUT_MS);
 
   let groqStream: Awaited<ReturnType<typeof groq.chat.completions.create>>;
@@ -194,13 +229,22 @@ export async function POST(req: NextRequest) {
     );
   } catch (err) {
     const aborted =
-      err instanceof Error &&
-      (err.name === "TimeoutError" || err.name === "AbortError");
-    const detail = err instanceof Error ? err.message : "Unknown Groq error";
-    console.error("[/api/chat] Groq request failed:", detail);
+      err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError');
+    const detail = err instanceof Error ? err.message : 'Unknown Groq error';
+    console.error('[/api/chat] Groq request failed:', detail);
+
+    // Log API usage (failed)
+    await supabase.from('api_usage').insert({
+      user_id: user.id,
+      endpoint: '/api/chat',
+      method: 'POST',
+      status_code: aborted ? 504 : 502,
+      latency_ms: Date.now() - startTime,
+    });
+
     return Response.json(
       {
-        error: aborted ? "Upstream timeout" : "Upstream model error",
+        error: aborted ? 'Upstream timeout' : 'Upstream model error',
         detail,
       },
       { status: aborted ? 504 : 502 }
@@ -209,48 +253,115 @@ export async function POST(req: NextRequest) {
 
   // ---- Convert AsyncIterable -> SSE ReadableStream --------------------------
   const encoder = new TextEncoder();
+  let fullResponse = '';
+  let tokensUsed = 0;
+
   const sse = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
         for await (const chunk of groqStream as AsyncIterable<{
           choices?: { delta?: { content?: string | null } }[];
+          usage?: { total_tokens?: number };
         }>) {
           if (timeoutSignal.aborted) {
             controller.enqueue(
-              encoder.encode(sseError("stream_timeout", "Upstream timed out mid-stream."))
+              encoder.encode(sseError('stream_timeout', 'Upstream timed out mid-stream.'))
             );
             controller.close();
             return;
           }
+
           const delta = chunk?.choices?.[0]?.delta?.content;
           if (delta) {
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ delta })}\n\n`)
-            );
+            fullResponse += delta;
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ delta })}\n\n`));
+          }
+
+          // Capture token usage if available
+          if (chunk.usage?.total_tokens) {
+            tokensUsed = chunk.usage.total_tokens;
           }
         }
-        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
         controller.close();
+
+        // ---- Post-stream: Save assistant message and update analytics ---------
+        const latencyMs = Date.now() - startTime;
+
+        // Save assistant message
+        if (sessionId) {
+          try {
+            await addChatMessage(sessionId, user.id, 'assistant', fullResponse, {
+              tokensUsed,
+              model,
+              latencyMs,
+            });
+          } catch (error) {
+            console.error('Failed to save assistant message:', error);
+          }
+        }
+
+        // Update daily activity
+        try {
+          await updateDailyActivity(user.id, {
+            messagesSent: 1,
+            sessionsStarted: body.sessionId ? 0 : 1,
+            timeSpentMinutes: Math.ceil(latencyMs / 60000),
+            subjectsPracticed: [body.subject],
+          });
+        } catch (error) {
+          console.error('Failed to update daily activity:', error);
+        }
+
+        // Update learning progress if competency provided
+        if (body.competencyCode) {
+          try {
+            await updateLearningProgress(user.id, body.competencyCode, {
+              competencyName: body.competencyCode, // Should be passed from client
+              subject: body.subject,
+              grade: body.grade,
+              questionsAsked: 1,
+              timeSpentMinutes: Math.ceil(latencyMs / 60000),
+            });
+          } catch (error) {
+            console.error('Failed to update learning progress:', error);
+          }
+        }
+
+        // Log API usage
+        await supabase.from('api_usage').insert({
+          user_id: user.id,
+          endpoint: '/api/chat',
+          method: 'POST',
+          tokens_used: tokensUsed,
+          status_code: 200,
+          latency_ms: latencyMs,
+        });
+
+        // Increment daily quota
+        await supabase.rpc('increment_daily_quota', { p_user_id: user.id });
       } catch (err) {
-        const detail = err instanceof Error ? err.message : "Stream interrupted";
-        console.error("[/api/chat] Stream error:", detail);
-        controller.enqueue(encoder.encode(sseError("stream_interrupted", detail)));
+        const detail = err instanceof Error ? err.message : 'Stream interrupted';
+        console.error('[/api/chat] Stream error:', detail);
+        controller.enqueue(encoder.encode(sseError('stream_interrupted', detail)));
         controller.close();
       }
     },
     cancel() {
-      // Client disconnected (Stop button / page nav). Best-effort cleanup;
-      // the AsyncIterable will throw on next read and the catch above runs.
+      // Client disconnected
     },
   });
 
   return new Response(sse, {
     headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
-      "X-RateLimit-Remaining": String(decision.remaining),
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+      'X-RateLimit-Remaining': String(rateLimitResult.remaining),
+      'X-RateLimit-Limit': String(rateLimitResult.limit),
+      'X-Session-Id': sessionId || '',
     },
   });
 }

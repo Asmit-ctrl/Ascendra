@@ -31,6 +31,8 @@ import {
 } from 'lucide-react';
 import { StudentHeader } from '@/components/layout/student-header';
 import { GamificationPanel } from '@/components/student/gamification-panel';
+import { GamificationOverview } from '@/components/gamification/gamification-overview';
+import { LeaderboardPanel } from '@/components/gamification/leaderboard-panel';
 import { tutorTaglineFor } from '@/lib/grade-greetings';
 import type { GamificationMode } from '@/components/student/gamification-panel';
 import {
@@ -513,32 +515,23 @@ export default function StudentDashboardPage() {
 
           {/* Gamification Tab */}
           {activeTab === 'gamification' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-semibold">Your achievements</h2>
-                <p className="text-sm text-muted-foreground">
-                  Pick the style that motivates you most.
-                </p>
-              </div>
-              <GamificationModeSwitcher
-                mode={gamificationMode}
-                onChange={setGamificationMode}
+          <div className="space-y-6">
+            <GamificationOverview
+              userId={getStudentId()}
+              userName={studentName}
+            />
+            <div className="grid gap-6 lg:grid-cols-2">
+              <LeaderboardPanel
+                userId={getStudentId()}
+                scope="class"
+                title="Class Leaderboard"
+              />
+              <LeaderboardPanel
+                userId={getStudentId()}
+                scope="school"
+                title="School Leaderboard"
               />
             </div>
-            <GamificationPanel
-              mode={gamificationMode}
-              data={{
-                points: 1250,
-                level: 5,
-                streak: 12,
-                badges: getDemoBadges(),
-                rank: 3,
-                totalStudents: 45,
-                pointsToNextLevel: 500,
-                currentLevelPoints: 250,
-              }}
-            />
           </div>
           )}
 

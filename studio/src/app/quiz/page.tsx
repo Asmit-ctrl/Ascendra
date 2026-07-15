@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Loader2, CheckCircle2, XCircle, BookOpen, Award } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { offlineQueue, useOfflineQueue } from '@/lib/offline-queue';
 
 interface Question {
   question: string;
@@ -55,6 +56,20 @@ export default function QuizPage() {
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [gradeResult, setGradeResult] = useState<GradeResult | null>(null);
   const [grading, setGrading] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+  const { count: queuedCount, processing: queueProcessing, online: queueOnline, processQueue } = useOfflineQueue();
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const updateOnline = () => setIsOnline(navigator.onLine);
+    updateOnline();
+    window.addEventListener('online', updateOnline);
+    window.addEventListener('offline', updateOnline);
+    return () => {
+      window.removeEventListener('online', updateOnline);
+      window.removeEventListener('offline', updateOnline);
+    };
+  }, []);
 
   async function generateQuiz() {
     setGenerating(true);
@@ -101,24 +116,30 @@ export default function QuizPage() {
     if (!quiz) return;
     setGrading(true);
 
+    const submission = {
+      quiz_id: 'demo',
+      student_id: 'demo-student',
+      answers: quiz.questions.map((_, i) => ({
+        question_id: String(i),
+        answer: answers[i] ?? '',
+      })),
+    };
+
+    const gradeUrl = '/api/v1/mvp/agents/assessment/grade';
+    const requestInit: RequestInit = {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ quiz, submission }),
+    };
+
     try {
-      const submission = {
-        quiz_id: 'demo',
-        student_id: 'demo-student',
-        answers: quiz.questions.map((_, i) => ({
-          question_id: String(i),
-          answer: answers[i] ?? '',
-        })),
-      };
+      if (!isOnline) {
+        throw new Error('offline');
+      }
 
-      const res = await fetch('/api/v1/mvp/agents/assessment/grade', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quiz, submission }),
-      });
-
+      const res = await fetch(gradeUrl, requestInit);
       if (!res.ok) {
-        throw new Error('Failed to grade quiz');
+        throw new Error(`Failed to grade quiz: ${res.status}`);
       }
 
       const data = await res.json();
@@ -134,10 +155,10 @@ export default function QuizPage() {
       });
     } catch (err) {
       console.error('[QuizPage] Failed to grade quiz:', err);
+      await offlineQueue.add(gradeUrl, requestInit);
       toast({
-        title: 'Error',
-        description: 'Failed to grade quiz. Please try again.',
-        variant: 'destructive',
+        title: 'Quiz grading queued',
+        description: 'Your answers have been queued and will sync automatically when back online.',
       });
     } finally {
       setGrading(false);
@@ -181,6 +202,17 @@ export default function QuizPage() {
             <CardDescription>
               Create a CBC-aligned quiz for any grade and subject
             </CardDescription>
+            <div className="mt-2 flex flex-col gap-2 text-sm text-muted-foreground md:flex-row md:items-center">
+              <span className={isOnline ? 'text-emerald-600' : 'text-amber-600'}>
+                {isOnline ? 'Online' : 'Offline mode: grading will queue'}
+              </span>
+              {queuedCount > 0 && (
+                <span className="text-xs rounded-full border border-border bg-muted px-3 py-1 text-foreground">
+                  {queuedCount} request{queuedCount === 1 ? '' : 's'} queued for sync
+                  {queueProcessing ? ' — retrying...' : queueOnline ? ' — will sync when online' : ' — waiting for connection'}
+                </span>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

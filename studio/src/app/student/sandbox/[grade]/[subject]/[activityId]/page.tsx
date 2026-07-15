@@ -2,8 +2,10 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
+import { useAuth } from '@/hooks/use-auth';
 import { StudentHeader } from '@/components/layout/student-header';
 import { getActivityById } from '@/lib/sandbox-activities';
+import { submitActivity } from '@/lib/sandbox-submission';
 import type { Activity, Manipulative } from '@/lib/sandbox-types';
 
 // Two renderers — we pick based on whether the activity has been
@@ -68,19 +70,49 @@ export default function ActivityPage() {
   };
 
   // Shared progress-persistence used by both renderers.
-  const persistCompletion = (score: number) => {
-    const progressKey = `sandbox-progress-${grade}-${subject}`;
-    const savedProgress = localStorage.getItem(progressKey);
-    const progress = savedProgress ? JSON.parse(savedProgress) : {
-      completedActivityIds: [],
-      totalPoints: 0,
-      currentStreak: 0,
-    };
-    if (!progress.completedActivityIds.includes(activityId)) {
-      progress.completedActivityIds.push(activityId);
-      progress.totalPoints += score;
-      localStorage.setItem(progressKey, JSON.stringify(progress));
+  const { user } = useAuth();
+
+  const persistCompletion = async (score: number) => {
+    if (user?.id) {
+      try {
+        const difficultyLevel: 'easy' | 'medium' | 'hard' =
+          activity?.difficulty <= 2
+            ? 'easy'
+            : activity?.difficulty <= 4
+            ? 'medium'
+            : 'hard';
+
+        await submitActivity({
+          student_id: user.id,
+          activity_type: activity?.type ?? 'practice',
+          grade,
+          subject,
+          difficulty: difficultyLevel,
+          score,
+          time_spent: Math.ceil(score / 10),
+          answers: {
+            activityId,
+            mastered: true,
+          },
+        });
+      } catch (err) {
+        console.error('Failed to persist sandbox completion to Supabase:', err);
+      }
+    } else {
+      const progressKey = `sandbox-progress-${grade}-${subject}`;
+      const savedProgress = localStorage.getItem(progressKey);
+      const progress = savedProgress ? JSON.parse(savedProgress) : {
+        completedActivityIds: [],
+        totalPoints: 0,
+        currentStreak: 0,
+      };
+      if (!progress.completedActivityIds.includes(activityId)) {
+        progress.completedActivityIds.push(activityId);
+        progress.totalPoints += score;
+        localStorage.setItem(progressKey, JSON.stringify(progress));
+      }
     }
+
     router.push(`/student/sandbox/${grade}/${subject}`);
   };
 

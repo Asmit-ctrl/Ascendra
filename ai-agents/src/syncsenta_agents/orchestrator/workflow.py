@@ -35,6 +35,16 @@ class RoutingDecision(str, Enum):
     ASSESSMENT = "assessment"
     SCHOOL_INTELLIGENCE = "school_intelligence"
     CAREER_PATHWAYS = "career_pathways"
+    CULTURAL_LOCALIZATION = "cultural_localization"
+    EQUITY_INCLUSION = "equity_inclusion"
+    PERSONA_MOTIVATION = "persona_motivation"
+    MASTERY = "mastery"
+    CREATIVITY_INNOVATION = "creativity_innovation"
+    SEL = "sel"
+    REAL_WORLD_PROBLEM_SOLVER = "real_world_problem_solver"
+    TEACHER_SUPPORT = "teacher_support"
+    CREDENTIAL_VERIFICATION = "credential_verification"
+    COORDINATOR = "coordinator"
     MULTI_AGENT = "multi_agent"
     ERROR = "error"
 
@@ -88,6 +98,16 @@ class LangGraphOrchestrator:
         self.workflow.add_node("execute_assessment", self._execute_assessment_agent)
         self.workflow.add_node("execute_intelligence", self._execute_intelligence_agent)
         self.workflow.add_node("execute_career", self._execute_career_agent)
+        self.workflow.add_node("execute_cultural_localization", self._execute_cultural_localization_agent)
+        self.workflow.add_node("execute_equity_inclusion", self._execute_equity_inclusion_agent)
+        self.workflow.add_node("execute_persona_motivation", self._execute_persona_motivation_agent)
+        self.workflow.add_node("execute_mastery", self._execute_mastery_agent)
+        self.workflow.add_node("execute_creativity_innovation", self._execute_creativity_innovation_agent)
+        self.workflow.add_node("execute_sel", self._execute_sel_agent)
+        self.workflow.add_node("execute_real_world_problem_solver", self._execute_real_world_problem_solver_agent)
+        self.workflow.add_node("execute_teacher_support", self._execute_teacher_support_agent)
+        self.workflow.add_node("execute_credential_verification", self._execute_credential_verification_agent)
+        self.workflow.add_node("execute_coordinator", self._execute_coordinator_agent)
         self.workflow.add_node("execute_multi_agent", self._execute_multi_agent)
         self.workflow.add_node("synthesize_response", self._synthesize_response)
         self.workflow.add_node("handle_error", self._handle_error)
@@ -106,6 +126,16 @@ class LangGraphOrchestrator:
                 RoutingDecision.ASSESSMENT: "execute_assessment",
                 RoutingDecision.SCHOOL_INTELLIGENCE: "execute_intelligence",
                 RoutingDecision.CAREER_PATHWAYS: "execute_career",
+                RoutingDecision.CULTURAL_LOCALIZATION: "execute_cultural_localization",
+                RoutingDecision.EQUITY_INCLUSION: "execute_equity_inclusion",
+                RoutingDecision.PERSONA_MOTIVATION: "execute_persona_motivation",
+                RoutingDecision.MASTERY: "execute_mastery",
+                RoutingDecision.CREATIVITY_INNOVATION: "execute_creativity_innovation",
+                RoutingDecision.SEL: "execute_sel",
+                RoutingDecision.REAL_WORLD_PROBLEM_SOLVER: "execute_real_world_problem_solver",
+                RoutingDecision.TEACHER_SUPPORT: "execute_teacher_support",
+                RoutingDecision.CREDENTIAL_VERIFICATION: "execute_credential_verification",
+                RoutingDecision.COORDINATOR: "execute_coordinator",
                 RoutingDecision.MULTI_AGENT: "execute_multi_agent",
                 RoutingDecision.ERROR: "handle_error"
             }
@@ -115,6 +145,11 @@ class LangGraphOrchestrator:
         for agent_node in [
             "execute_socratic", "execute_curriculum", "execute_lesson",
             "execute_assessment", "execute_intelligence", "execute_career",
+            "execute_cultural_localization", "execute_equity_inclusion",
+            "execute_persona_motivation", "execute_mastery",
+            "execute_creativity_innovation", "execute_sel",
+            "execute_real_world_problem_solver", "execute_teacher_support",
+            "execute_credential_verification", "execute_coordinator",
             "execute_multi_agent"
         ]:
             self.workflow.add_edge(agent_node, "synthesize_response")
@@ -193,7 +228,17 @@ Available Agents:
 4. ASSESSMENT - For quiz generation, grading, rubric creation, feedback
 5. SCHOOL_INTELLIGENCE - For analytics, reports, performance insights, admin queries
 6. CAREER_PATHWAYS - For career guidance, pathway recommendations, aptitude assessment
-7. MULTI_AGENT - For complex requests requiring multiple agents
+7. CULTURAL_LOCALIZATION - For adapting content to local Kenyan culture and language
+8. EQUITY_INCLUSION - For inclusive, accessible, and bias-aware learning support
+9. PERSONA_MOTIVATION - For learner motivation, aspiration, and persona-driven coaching
+10. MASTERY - For competency progression, mastery planning, and long-term learning roadmaps
+11. CREATIVITY_INNOVATION - For creative projects, innovation challenges, and portfolio activities
+12. SEL - For social-emotional learning, mindset, and wellbeing support
+13. REAL_WORLD_PROBLEM_SOLVER - For linking learning to real-world local challenges
+14. TEACHER_SUPPORT - For teacher coaching, lesson adaptation, and classroom strategies
+15. CREDENTIAL_VERIFICATION - For evidence-based credential pathways and verification guidance
+16. COORDINATOR - For coordinating multiple agents into one coherent learning plan
+17. MULTI_AGENT - For complex requests requiring multiple agents
 
 User Request: {user_message}
 
@@ -247,6 +292,16 @@ If multiple agents are needed, respond with MULTI_AGENT.
                 "ASSESSMENT": RoutingDecision.ASSESSMENT,
                 "SCHOOL_INTELLIGENCE": RoutingDecision.SCHOOL_INTELLIGENCE,
                 "CAREER_PATHWAYS": RoutingDecision.CAREER_PATHWAYS,
+                "CULTURAL_LOCALIZATION": RoutingDecision.CULTURAL_LOCALIZATION,
+                "EQUITY_INCLUSION": RoutingDecision.EQUITY_INCLUSION,
+                "PERSONA_MOTIVATION": RoutingDecision.PERSONA_MOTIVATION,
+                "MASTERY": RoutingDecision.MASTERY,
+                "CREATIVITY_INNOVATION": RoutingDecision.CREATIVITY_INNOVATION,
+                "SEL": RoutingDecision.SEL,
+                "REAL_WORLD_PROBLEM_SOLVER": RoutingDecision.REAL_WORLD_PROBLEM_SOLVER,
+                "TEACHER_SUPPORT": RoutingDecision.TEACHER_SUPPORT,
+                "CREDENTIAL_VERIFICATION": RoutingDecision.CREDENTIAL_VERIFICATION,
+                "COORDINATOR": RoutingDecision.COORDINATOR,
                 "MULTI_AGENT": RoutingDecision.MULTI_AGENT
             }
             
@@ -282,8 +337,26 @@ If multiple agents are needed, respond with MULTI_AGENT.
             return RoutingDecision.LESSON_ARCHITECT
         if any(k in text for k in ("career", "pathway", "what should i become")):
             return RoutingDecision.CAREER_PATHWAYS
-        if any(k in text for k in ("kicd", "competency", "strand")):
-            return RoutingDecision.CBC_CURRICULUM
+        if any(k in text for k in ("cultural", "local", "ethnic", "region", "language")):
+            return RoutingDecision.CULTURAL_LOCALIZATION
+        if any(k in text for k in ("inclusive", "equity", "bias", "accessible", "disability")):
+            return RoutingDecision.EQUITY_INCLUSION
+        if any(k in text for k in ("aspiration", "motiv", "role model", "dream", "future leader")):
+            return RoutingDecision.PERSONA_MOTIVATION
+        if any(k in text for k in ("mastery", "spaced repetition", "long-term", "progression", "competency roadmap")):
+            return RoutingDecision.MASTERY
+        if any(k in text for k in ("creative", "innovation", "project", "portfolio", "challenge")):
+            return RoutingDecision.CREATIVITY_INNOVATION
+        if any(k in text for k in ("emotion", "mindset", "confidence", "stress", "resilience")):
+            return RoutingDecision.SEL
+        if any(k in text for k in ("community challenge", "real world", "local problem", "sustainability", "impact")):
+            return RoutingDecision.REAL_WORLD_PROBLEM_SOLVER
+        if any(k in text for k in ("teacher support", "classroom strategy", "lesson feedback", "teacher coach")):
+            return RoutingDecision.TEACHER_SUPPORT
+        if any(k in text for k in ("credential", "certificate", "verify achievement", "proof of learning")):
+            return RoutingDecision.CREDENTIAL_VERIFICATION
+        if any(k in text for k in ("coordinate", "orchestrate", "multi-agent", "combined plan")):
+            return RoutingDecision.COORDINATOR
         return RoutingDecision.SOCRATIC_TUTOR
     
     async def _execute_socratic_agent(self, state: AgentState) -> AgentState:
@@ -449,7 +522,237 @@ If multiple agents are needed, respond with MULTI_AGENT.
             self.logger.error("Career agent execution failed", error=str(e))
             state["error"] = f"Career agent failed: {str(e)}"
             return state
-    
+
+    async def _execute_cultural_localization_agent(self, state: AgentState) -> AgentState:
+        """Execute Cultural Localization agent."""
+        try:
+            self.logger.info("Executing Cultural Localization agent")
+            agent = self.agent_registry.get("cultural_localization")
+            if agent:
+                response = await agent.execute_task(
+                    request=state["messages"][-1].content,
+                    context=state["context"]
+                )
+                state["agent_responses"]["cultural_localization"] = response
+            else:
+                state["agent_responses"]["cultural_localization"] = {
+                    "response": "Cultural Localization agent not yet implemented",
+                    "agent": "cultural_localization"
+                }
+            state["current_agent"] = "cultural_localization"
+            return state
+        except Exception as e:
+            self.logger.error("Cultural Localization agent execution failed", error=str(e))
+            state["error"] = f"Cultural Localization agent failed: {str(e)}"
+            return state
+
+    async def _execute_equity_inclusion_agent(self, state: AgentState) -> AgentState:
+        """Execute Equity Inclusion agent."""
+        try:
+            self.logger.info("Executing Equity Inclusion agent")
+            agent = self.agent_registry.get("equity_inclusion")
+            if agent:
+                response = await agent.execute_task(
+                    request=state["messages"][-1].content,
+                    context=state["context"]
+                )
+                state["agent_responses"]["equity_inclusion"] = response
+            else:
+                state["agent_responses"]["equity_inclusion"] = {
+                    "response": "Equity Inclusion agent not yet implemented",
+                    "agent": "equity_inclusion"
+                }
+            state["current_agent"] = "equity_inclusion"
+            return state
+        except Exception as e:
+            self.logger.error("Equity Inclusion agent execution failed", error=str(e))
+            state["error"] = f"Equity Inclusion agent failed: {str(e)}"
+            return state
+
+    async def _execute_persona_motivation_agent(self, state: AgentState) -> AgentState:
+        """Execute Persona Motivation agent."""
+        try:
+            self.logger.info("Executing Persona Motivation agent")
+            agent = self.agent_registry.get("persona_motivation")
+            if agent:
+                response = await agent.execute_task(
+                    request=state["messages"][-1].content,
+                    context=state["context"]
+                )
+                state["agent_responses"]["persona_motivation"] = response
+            else:
+                state["agent_responses"]["persona_motivation"] = {
+                    "response": "Persona Motivation agent not yet implemented",
+                    "agent": "persona_motivation"
+                }
+            state["current_agent"] = "persona_motivation"
+            return state
+        except Exception as e:
+            self.logger.error("Persona Motivation agent execution failed", error=str(e))
+            state["error"] = f"Persona Motivation agent failed: {str(e)}"
+            return state
+
+    async def _execute_mastery_agent(self, state: AgentState) -> AgentState:
+        """Execute Mastery agent."""
+        try:
+            self.logger.info("Executing Mastery agent")
+            agent = self.agent_registry.get("mastery")
+            if agent:
+                response = await agent.execute_task(
+                    request=state["messages"][-1].content,
+                    context=state["context"]
+                )
+                state["agent_responses"]["mastery"] = response
+            else:
+                state["agent_responses"]["mastery"] = {
+                    "response": "Mastery agent not yet implemented",
+                    "agent": "mastery"
+                }
+            state["current_agent"] = "mastery"
+            return state
+        except Exception as e:
+            self.logger.error("Mastery agent execution failed", error=str(e))
+            state["error"] = f"Mastery agent failed: {str(e)}"
+            return state
+
+    async def _execute_creativity_innovation_agent(self, state: AgentState) -> AgentState:
+        """Execute Creativity & Innovation agent."""
+        try:
+            self.logger.info("Executing Creativity & Innovation agent")
+            agent = self.agent_registry.get("creativity_innovation")
+            if agent:
+                response = await agent.execute_task(
+                    request=state["messages"][-1].content,
+                    context=state["context"]
+                )
+                state["agent_responses"]["creativity_innovation"] = response
+            else:
+                state["agent_responses"]["creativity_innovation"] = {
+                    "response": "Creativity & Innovation agent not yet implemented",
+                    "agent": "creativity_innovation"
+                }
+            state["current_agent"] = "creativity_innovation"
+            return state
+        except Exception as e:
+            self.logger.error("Creativity & Innovation execution failed", error=str(e))
+            state["error"] = f"Creativity & Innovation agent failed: {str(e)}"
+            return state
+
+    async def _execute_sel_agent(self, state: AgentState) -> AgentState:
+        """Execute Social Emotional Learning agent."""
+        try:
+            self.logger.info("Executing SEL agent")
+            agent = self.agent_registry.get("sel")
+            if agent:
+                response = await agent.execute_task(
+                    request=state["messages"][-1].content,
+                    context=state["context"]
+                )
+                state["agent_responses"]["sel"] = response
+            else:
+                state["agent_responses"]["sel"] = {
+                    "response": "SEL agent not yet implemented",
+                    "agent": "sel"
+                }
+            state["current_agent"] = "sel"
+            return state
+        except Exception as e:
+            self.logger.error("SEL agent execution failed", error=str(e))
+            state["error"] = f"SEL agent failed: {str(e)}"
+            return state
+
+    async def _execute_real_world_problem_solver_agent(self, state: AgentState) -> AgentState:
+        """Execute Real-World Problem Solver agent."""
+        try:
+            self.logger.info("Executing Real-World Problem Solver agent")
+            agent = self.agent_registry.get("real_world_problem_solver")
+            if agent:
+                response = await agent.execute_task(
+                    request=state["messages"][-1].content,
+                    context=state["context"]
+                )
+                state["agent_responses"]["real_world_problem_solver"] = response
+            else:
+                state["agent_responses"]["real_world_problem_solver"] = {
+                    "response": "Real-World Problem Solver agent not yet implemented",
+                    "agent": "real_world_problem_solver"
+                }
+            state["current_agent"] = "real_world_problem_solver"
+            return state
+        except Exception as e:
+            self.logger.error("Real-World Problem Solver execution failed", error=str(e))
+            state["error"] = f"Real-World Problem Solver agent failed: {str(e)}"
+            return state
+
+    async def _execute_teacher_support_agent(self, state: AgentState) -> AgentState:
+        """Execute Teacher Support agent."""
+        try:
+            self.logger.info("Executing Teacher Support agent")
+            agent = self.agent_registry.get("teacher_support")
+            if agent:
+                response = await agent.execute_task(
+                    request=state["messages"][-1].content,
+                    context=state["context"]
+                )
+                state["agent_responses"]["teacher_support"] = response
+            else:
+                state["agent_responses"]["teacher_support"] = {
+                    "response": "Teacher Support agent not yet implemented",
+                    "agent": "teacher_support"
+                }
+            state["current_agent"] = "teacher_support"
+            return state
+        except Exception as e:
+            self.logger.error("Teacher Support execution failed", error=str(e))
+            state["error"] = f"Teacher Support agent failed: {str(e)}"
+            return state
+
+    async def _execute_credential_verification_agent(self, state: AgentState) -> AgentState:
+        """Execute Credential Verification agent."""
+        try:
+            self.logger.info("Executing Credential Verification agent")
+            agent = self.agent_registry.get("credential_verification")
+            if agent:
+                response = await agent.execute_task(
+                    request=state["messages"][-1].content,
+                    context=state["context"]
+                )
+                state["agent_responses"]["credential_verification"] = response
+            else:
+                state["agent_responses"]["credential_verification"] = {
+                    "response": "Credential Verification agent not yet implemented",
+                    "agent": "credential_verification"
+                }
+            state["current_agent"] = "credential_verification"
+            return state
+        except Exception as e:
+            self.logger.error("Credential Verification execution failed", error=str(e))
+            state["error"] = f"Credential Verification agent failed: {str(e)}"
+            return state
+
+    async def _execute_coordinator_agent(self, state: AgentState) -> AgentState:
+        """Execute Coordinator agent."""
+        try:
+            self.logger.info("Executing Coordinator agent")
+            agent = self.agent_registry.get("coordinator")
+            if agent:
+                response = await agent.execute_task(
+                    request=state["messages"][-1].content,
+                    context=state["context"]
+                )
+                state["agent_responses"]["coordinator"] = response
+            else:
+                state["agent_responses"]["coordinator"] = {
+                    "response": "Coordinator agent not yet implemented",
+                    "agent": "coordinator"
+                }
+            state["current_agent"] = "coordinator"
+            return state
+        except Exception as e:
+            self.logger.error("Coordinator execution failed", error=str(e))
+            state["error"] = f"Coordinator agent failed: {str(e)}"
+            return state
+
     async def _execute_multi_agent(self, state: AgentState) -> AgentState:
         """Execute multiple agents for complex requests."""
         try:

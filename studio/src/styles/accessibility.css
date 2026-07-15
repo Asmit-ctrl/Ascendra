@@ -59,6 +59,35 @@ body {
   scroll-behavior: auto !important;
 }
 
+/* Low Bandwidth Mode */
+.low-bandwidth {
+  background-image: none !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+.low-bandwidth * {
+  background-image: none !important;
+  box-shadow: none !important;
+  filter: none !important;
+  transition-duration: 0.01ms !important;
+  animation-duration: 0.01ms !important;
+}
+
+.low-bandwidth img,
+.low-bandwidth picture,
+.low-bandwidth video {
+  image-rendering: optimize-speed !important;
+  opacity: 0.95 !important;
+}
+
+.low-bandwidth .hero,
+.low-bandwidth .banner,
+.low-bandwidth .illustration,
+.low-bandwidth .decorative-pattern {
+  display: none !important;
+}
+
 /* Large Touch Targets */
 .large-targets button,
 .large-targets a,

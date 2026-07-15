@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Activity } from '@/lib/sandbox-types';
 import { CurriculumActivity } from '@/lib/curriculum-activities-mapper';
-import { Sparkles, Trophy, ArrowRight, Lightbulb, CheckCircle } from 'lucide-react';
+import { Sparkles, Lightbulb, CheckCircle } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { submitActivity } from '@/lib/sandbox-submission';
 import { useAuth } from '@/hooks/use-auth';
@@ -18,8 +18,15 @@ interface GenericActivityProps {
   onBack: () => void;
 }
 
-// This component dynamically generates activities based on the activity definition
-// It uses the curriculum data to create appropriate challenges
+interface ActivityQuestion {
+  id: string;
+  question: string;
+  options: string[];
+  correctAnswer: number;
+  hint: string;
+  explanation: string;
+}
+
 export default function GenericActivity({ activity, onComplete, onBack }: GenericActivityProps) {
   const { user } = useAuth();
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -30,192 +37,138 @@ export default function GenericActivity({ activity, onComplete, onBack }: Generi
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const [isCorrect, setIsCorrect] = useState(false);
-  const [startTime] = useState(Date.now());
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
+  const [startTime] = useState(Date.now());
 
-  // Generate questions based on activity type and learning objectives.
-  // useState so the Fisher-Yates shuffle runs once per mount — re-shuffling on
-  // every render would move the correct answer mid-question.
-  const [questions] = useState(() => generateQuestionsFromActivity(activity));
+  const questions = generateQuestionsFromActivity(activity);
   const totalQuestions = questions.length;
   const progress = ((currentQuestion + 1) / totalQuestions) * 100;
+  const currentQ = questions[currentQuestion];
 
-  // Fisher-Yates. Returns a new array; does not mutate the input.
   function shuffle<T>(input: T[]): T[] {
     const arr = input.slice();
-    for (let i = arr.length - 1; i > 0; i--) {
+    for (let i = arr.length - 1; i > 0; i -= 1) {
       const j = Math.floor(Math.random() * (i + 1));
       [arr[i], arr[j]] = [arr[j], arr[i]];
     }
     return arr;
   }
 
-  function generateQuestionsFromActivity(activity: Activity) {
-    // Check if this is a curriculum activity with pre-generated questions
+  function generateQuestionsFromActivity(activity: Activity): ActivityQuestion[] {
     const curriculumActivity = activity as CurriculumActivity;
     if (curriculumActivity.questions && curriculumActivity.questions.length > 0) {
-      // Use curriculum-generated questions
       return curriculumActivity.questions.map((q, index) => {
         const shuffledOptions = shuffle(q.options);
         const correctAnswer = shuffledOptions.indexOf(q.options[q.correctAnswer]);
-        
         return {
           id: `q${index + 1}`,
           question: q.question,
           options: shuffledOptions,
           correctAnswer,
           hint: q.hint,
-          explanation: `Excellent! You got it right!`,
+          explanation: 'Excellent! You got it right!',
         };
       });
     }
-    
-    // Fallback: generate questions from learning objectives (legacy activities)
-    const questions: any[] = [];
 
-    // Use learning objectives to create questions
-    activity.learningObjectives.forEach((objective, index) => {
-      // Option generators always emit the correct answer at index 0; we shuffle
-      // here and record where it landed so the UI can't be brute-forced by
-      // always pressing the first button.
+    return activity.learningObjectives.slice(0, 5).map((objective, index) => {
       const rawOptions = generateOptionsForObjective(objective, activity);
       const correctOption = rawOptions[0];
       const shuffledOptions = shuffle(rawOptions);
       const correctAnswer = shuffledOptions.indexOf(correctOption);
-
-      questions.push({
+      return {
         id: `q${index + 1}`,
         question: generateQuestionFromObjective(objective, activity),
         options: shuffledOptions,
         correctAnswer,
         hint: generateHintFromObjective(objective),
         explanation: `Great! ${objective}`,
-      });
+      };
     });
-
-    return questions.slice(0, 5); // Limit to 5 questions per activity
   }
 
   function generateQuestionFromObjective(objective: string, activity: Activity): string {
-    // Convert learning objective into a question
     const subject = activity.subject;
-    const grade = activity.grade.replace('g', '');
-    
-    // Template-based question generation
+
     if (subject === 'mathematics') {
-      if (objective.includes('count')) {
-        return `Count the objects and choose the correct number:`;
-      } else if (objective.includes('add')) {
-        return `What is 5 + 3?`;
-      } else if (objective.includes('subtract')) {
-        return `What is 10 - 4?`;
-      } else if (objective.includes('shape')) {
-        return `Which shape has 4 equal sides?`;
-      }
-    } else if (subject === 'english') {
-      if (objective.includes('sound')) {
-        return `Which word starts with the 'b' sound?`;
-      } else if (objective.includes('read')) {
-        return `What is the main idea of this story?`;
-      } else if (objective.includes('write')) {
-        return `Which sentence is correct?`;
-      }
-    } else if (subject === 'kiswahili') {
-      if (objective.includes('sauti')) {
-        return `Neno gani linaanza na sauti ya 'm'?`;
-      } else if (objective.includes('soma')) {
-        return `Hadithi hii inahusu nini?`;
-      }
-    } else if (subject === 'environmental') {
-      if (objective.includes('plant')) {
-        return `Which of these is a plant?`;
-      } else if (objective.includes('animal')) {
-        return `Which animal lives in water?`;
-      } else if (objective.includes('weather')) {
-        return `What do we wear when it rains?`;
-      }
-    } else if (subject === 'cre') {
-      const obj = objective.toLowerCase();
-      if (obj.includes('creation') || obj.includes('created')) {
-        return `What did God create on the first day?`;
-      } else if (obj.includes('identify things')) {
-        return `Which of these did God create?`;
-      } else if (obj.includes('appreciate')) {
-        return `How can we appreciate God's creation?`;
-      } else if (obj.includes('prayer')) {
-        return `When should we pray?`;
-      } else if (obj.includes('good deed') || obj.includes('kindness')) {
-        return `Which of these is a good deed?`;
-      } else if (obj.includes('bible') || obj.includes('hero')) {
-        return `Who is a hero from the Bible?`;
-      }
-    } else if (subject === 'creative') {
-      if (objective.includes('shape')) {
-        return `Which shape can you use to draw a house?`;
-      } else if (objective.includes('rhythm')) {
-        return `Which action shows rhythm?`;
-      }
+      if (objective.includes('count')) return 'Count the objects and choose the correct number:';
+      if (objective.includes('add')) return 'What is 5 + 3?';
+      if (objective.includes('subtract')) return 'What is 10 - 4?';
+      if (objective.includes('shape')) return 'Which shape has 4 equal sides?';
     }
-    
-    // Default question
+
+    if (subject === 'english') {
+      if (objective.includes('sound')) return "Which word starts with the 'b' sound?";
+      if (objective.includes('read')) return 'What is the main idea of this story?';
+      if (objective.includes('write')) return 'Which sentence is correct?';
+    }
+
+    if (subject === 'kiswahili') {
+      if (objective.includes('sauti')) return "Neno gani linaanza na sauti ya 'm'?";
+      if (objective.includes('soma')) return 'Hadithi hii inahusu nini?';
+    }
+
+    if (subject === 'environmental') {
+      if (objective.includes('plant')) return 'Which of these is a plant?';
+      if (objective.includes('animal')) return 'Which animal lives in water?';
+      if (objective.includes('weather')) return 'What do we wear when it rains?';
+    }
+
+    if (subject === 'cre') {
+      const obj = objective.toLowerCase();
+      if (obj.includes('creation') || obj.includes('created')) return 'What did God create on the first day?';
+      if (obj.includes('identify things')) return 'Which of these did God create?';
+      if (obj.includes('appreciate')) return 'How can we appreciate God\'s creation?';
+      if (obj.includes('prayer')) return 'When should we pray?';
+      if (obj.includes('good deed') || obj.includes('kindness')) return 'Which of these is a good deed?';
+      if (obj.includes('bible') || obj.includes('hero')) return 'Who is a hero from the Bible?';
+    }
+
+    if (subject === 'creative') {
+      if (objective.includes('shape')) return 'Which shape can you use to draw a house?';
+      if (objective.includes('rhythm')) return 'Which action shows rhythm?';
+    }
+
     return `Let's practice: ${objective}`;
   }
 
   function generateOptionsForObjective(objective: string, activity: Activity): string[] {
     const subject = activity.subject;
-    
-    // Generate appropriate options based on subject
     if (subject === 'mathematics') {
-      if (objective.includes('count')) {
-        return ['8', '6', '10', '7'];
-      } else if (objective.includes('add')) {
-        return ['8', '7', '9', '6'];
-      } else if (objective.includes('shape')) {
-        return ['Square', 'Triangle', 'Circle', 'Rectangle'];
-      }
-    } else if (subject === 'english') {
-      if (objective.includes('sound')) {
-        return ['Ball', 'Cat', 'Dog', 'Apple'];
-      } else if (objective.includes('sentence')) {
-        return ['I am happy.', 'i am happy', 'I am happy', 'i Am happy'];
-      }
-    } else if (subject === 'kiswahili') {
-      return ['Mama', 'Baba', 'Dada', 'Kaka'];
-    } else if (subject === 'environmental') {
-      if (objective.includes('plant')) {
-        return ['Tree', 'Car', 'Book', 'Chair'];
-      } else if (objective.includes('animal')) {
-        return ['Fish', 'Table', 'Pen', 'Cup'];
-      } else if (objective.includes('weather') || objective.includes('rain')) {
-        return ['Raincoat', 'Shorts', 'Sunglasses', 'Swimming suit'];
-      } else if (objective.includes('sun') || objective.includes('hot')) {
-        return ['Hat', 'Jacket', 'Boots', 'Scarf'];
-      } else if (objective.includes('cold')) {
-        return ['Sweater', 'Shorts', 'Sandals', 'T-shirt'];
-      } else if (objective.includes('water')) {
-        return ['River', 'Chair', 'Book', 'Pencil'];
-      } else if (objective.includes('food')) {
-        return ['Apple', 'Stone', 'Paper', 'Stick'];
-      }
-    } else if (subject === 'cre') {
-      const obj = objective.toLowerCase();
-      if (obj.includes('creation')) {
-        return ['Light', 'Animals', 'Plants', 'People'];
-      } else if (obj.includes('identify things') || obj.includes('created')) {
-        return ['Sun', 'Cars', 'Phones', 'Houses'];
-      } else if (obj.includes('appreciate')) {
-        return ['Care for nature', 'Waste water', 'Litter', 'Cut trees'];
-      } else if (obj.includes('prayer')) {
-        return ['Anytime', 'Never', 'Only Sunday', 'Only morning'];
-      } else if (obj.includes('good deed') || obj.includes('kindness') || obj.includes('help')) {
-        return ['Helping a friend', 'Lying', 'Stealing', 'Shouting'];
-      } else if (obj.includes('bible') || obj.includes('hero') || obj.includes('character')) {
-        return ['Moses', 'A teacher', 'A doctor', 'A driver'];
-      }
+      if (objective.includes('count')) return ['8', '6', '10', '7'];
+      if (objective.includes('add')) return ['8', '7', '9', '6'];
+      if (objective.includes('shape')) return ['Square', 'Triangle', 'Circle', 'Rectangle'];
     }
-    
-    // Default options — generic but meaningful so we never render bare
-    // "Option A/B/C/D" placeholders if an objective isn't matched above.
+
+    if (subject === 'english') {
+      if (objective.includes('sound')) return ['Ball', 'Cat', 'Dog', 'Apple'];
+      if (objective.includes('sentence')) return ['I am happy.', 'i am happy', 'I am happy', 'i Am happy'];
+    }
+
+    if (subject === 'kiswahili') {
+      return ['Mama', 'Baba', 'Dada', 'Kaka'];
+    }
+
+    if (subject === 'environmental') {
+      if (objective.includes('plant')) return ['Tree', 'Car', 'Book', 'Chair'];
+      if (objective.includes('animal')) return ['Fish', 'Table', 'Pen', 'Cup'];
+      if (objective.includes('weather') || objective.includes('rain')) return ['Raincoat', 'Shorts', 'Sunglasses', 'Swimming suit'];
+      if (objective.includes('sun') || objective.includes('hot')) return ['Hat', 'Jacket', 'Boots', 'Scarf'];
+      if (objective.includes('cold')) return ['Sweater', 'Shorts', 'Sandals', 'T-shirt'];
+      if (objective.includes('water')) return ['River', 'Chair', 'Book', 'Pencil'];
+      if (objective.includes('food')) return ['Apple', 'Stone', 'Paper', 'Stick'];
+    }
+
+    if (subject === 'cre') {
+      const obj = objective.toLowerCase();
+      if (obj.includes('creation')) return ['Light', 'Animals', 'Plants', 'People'];
+      if (obj.includes('identify things') || obj.includes('created')) return ['Sun', 'Cars', 'Phones', 'Houses'];
+      if (obj.includes('appreciate')) return ['Care for nature', 'Waste water', 'Litter', 'Cut trees'];
+      if (obj.includes('prayer')) return ['Anytime', 'Never', 'Only Sunday', 'Only morning'];
+      if (obj.includes('good deed') || obj.includes('kindness') || obj.includes('help')) return ['Helping a friend', 'Lying', 'Stealing', 'Shouting'];
+      if (obj.includes('bible') || obj.includes('hero') || obj.includes('character')) return ['Moses', 'A teacher', 'A doctor', 'A driver'];
+    }
+
     return ['Yes', 'No', 'Sometimes', 'I don\'t know'];
   }
 
@@ -223,11 +176,9 @@ export default function GenericActivity({ activity, onComplete, onBack }: Generi
     return `Think about: ${objective.toLowerCase()}`;
   }
 
-  const currentQ = questions[currentQuestion];
-
   const handleAnswerSelect = (answer: string, index: number) => {
     if (showFeedback) return;
-    
+
     setSelectedAnswer(answer);
     setAttempts(attempts + 1);
 
@@ -240,7 +191,7 @@ export default function GenericActivity({ activity, onComplete, onBack }: Generi
       confetti({
         particleCount: 50,
         spread: 60,
-        origin: { y: 0.7 }
+        origin: { y: 0.7 },
       });
     } else {
       setFeedbackMessage('Not quite! Try again or use a hint.');
@@ -256,7 +207,6 @@ export default function GenericActivity({ activity, onComplete, onBack }: Generi
           setSelectedAnswer(null);
           setShowHint(false);
         } else {
-          // Activity complete
           handleActivityComplete();
         }
       }, 2000);
@@ -277,14 +227,12 @@ export default function GenericActivity({ activity, onComplete, onBack }: Generi
     const timeSpent = Math.floor((Date.now() - startTime) / 1000);
     const finalScore = Math.round((score / (totalQuestions * 20)) * 100);
 
-    // Submit to Supabase
     if (user?.id) {
       try {
-        // Map numeric difficulty to string
         const difficultyLevel: 'easy' | 'medium' | 'hard' =
           activity.difficulty <= 2 ? 'easy' :
           activity.difficulty <= 4 ? 'medium' : 'hard';
-        
+
         await submitActivity({
           student_id: user.id,
           activity_type: activity.type,
@@ -293,10 +241,15 @@ export default function GenericActivity({ activity, onComplete, onBack }: Generi
           difficulty: difficultyLevel,
           score: finalScore,
           time_spent: timeSpent,
-          answers: { attempts, hintsUsed, totalQuestions },
+          answers: {
+            activityId: activity.id,
+            attempts,
+            hintsUsed,
+            totalQuestions,
+          },
         });
-      } catch (error) {
-        console.error('Error submitting activity:', error);
+      } catch (err) {
+        console.error('Failed to persist sandbox completion to Supabase:', err);
       }
     }
 
@@ -304,87 +257,70 @@ export default function GenericActivity({ activity, onComplete, onBack }: Generi
   };
 
   return (
-    <div className="max-w-4xl mx-auto">
-      {/* Header */}
-      <Card className="mb-6 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20">
+    <div className="space-y-6">
+      <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-4">
             <div>
-              <CardTitle className="text-3xl flex items-center gap-2">
-                <span className="text-4xl">{activity.icon}</span>
+              <CardTitle className="text-3xl flex items-center gap-3">
+                <span>{activity.icon}</span>
                 {activity.title}
               </CardTitle>
-              <p className="text-gray-600 dark:text-gray-300 mt-2">
-                {activity.description}
-              </p>
+              <p className="text-sm text-muted-foreground mt-1">{activity.description}</p>
             </div>
             <div className="text-right">
-              <Badge variant="outline" className="text-lg px-4 py-2">
-                Question {currentQuestion + 1} of {totalQuestions}
-              </Badge>
-              <div className="flex items-center gap-2 mt-2">
-                <Trophy className="w-5 h-5 text-yellow-500" />
-                <span className="text-xl font-bold">{score}</span>
-              </div>
+              <Badge variant="outline" className="text-sm">Question {currentQuestion + 1} of {totalQuestions}</Badge>
+              <div className="mt-3 text-sm text-slate-600 dark:text-slate-300">Score {score}</div>
             </div>
           </div>
-          <Progress value={progress} className="mt-4 h-2" />
         </CardHeader>
+        <CardContent>
+          <Progress value={progress} className="h-2" />
+        </CardContent>
       </Card>
 
-      {/* Question Card */}
-      <Card className="mb-6">
+      <Card>
         <CardHeader>
           <CardTitle className="text-2xl">{currentQ.question}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Visual representation (could be enhanced with images) */}
-          <div className="bg-muted p-8 rounded-lg flex items-center justify-center min-h-[200px]">
-            <p className="text-6xl">🎯</p>
-          </div>
-
-          {/* Options */}
-          <div className="grid grid-cols-2 gap-4">
-            {currentQ.options.map((option: string, index: number) => (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {currentQ.options.map((option, index) => (
               <Button
-                key={index}
+                key={option}
                 onClick={() => handleAnswerSelect(option, index)}
                 disabled={showFeedback}
-                variant={selectedAnswer === option ? "default" : "outline"}
-                className={`h-20 text-lg ${
-                  showFeedback && index === currentQ.correctAnswer
-                    ? 'bg-green-500 hover:bg-green-600 text-white'
-                    : showFeedback && selectedAnswer === option
-                    ? 'bg-red-500 hover:bg-red-600 text-white'
-                    : ''
-                }`}
+                variant={selectedAnswer === option ? 'default' : 'outline'}
+                className={
+                  selectedAnswer === option || showFeedback
+                    ? 'h-20 text-lg'
+                    : 'h-20 text-lg'
+                }
               >
                 {option}
               </Button>
             ))}
           </div>
 
-          {/* Hint */}
           {showHint && (
-            <Card className="bg-purple-50 dark:bg-purple-900/20 border-purple-500">
-              <CardContent className="pt-6">
+            <Card className="bg-purple-50 dark:bg-purple-950/20 border-purple-500">
+              <CardContent className="pt-4">
                 <div className="flex items-start gap-2">
-                  <Lightbulb className="w-5 h-5 text-purple-500 flex-shrink-0 mt-1" />
+                  <Lightbulb className="w-5 h-5 text-purple-500" />
                   <p className="text-sm">{currentQ.hint}</p>
                 </div>
               </CardContent>
             </Card>
           )}
 
-          {/* Feedback */}
           {showFeedback && (
-            <Card className={`${isCorrect ? 'bg-green-50 dark:bg-green-900/20 border-green-500' : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-500'}`}>
-              <CardContent className="pt-6">
+            <Card className={isCorrect ? 'bg-green-50 dark:bg-green-950/20 border-green-500' : 'bg-yellow-50 dark:bg-yellow-950/20 border-yellow-500'}>
+              <CardContent className="pt-4">
                 <div className="flex items-start gap-2">
                   {isCorrect ? (
-                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-1" />
+                    <CheckCircle className="w-5 h-5 text-green-500" />
                   ) : (
-                    <Sparkles className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-1" />
+                    <Sparkles className="w-5 h-5 text-yellow-500" />
                   )}
                   <p className="font-semibold">{feedbackMessage}</p>
                 </div>
@@ -392,39 +328,17 @@ export default function GenericActivity({ activity, onComplete, onBack }: Generi
             </Card>
           )}
 
-          {/* Action Buttons */}
-          <div className="flex gap-4 justify-center pt-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
             {!showHint && !showFeedback && (
-              <Button
-                variant="secondary"
-                onClick={handleHint}
-              >
+              <Button variant="secondary" onClick={handleHint}>
                 <Lightbulb className="w-4 h-4 mr-2" />
                 Show Hint
               </Button>
             )}
+            <Button variant="ghost" onClick={onBack}>
+              Back
+            </Button>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Learning Objectives */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">What You're Learning</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ul className="space-y-2">
-            {activity.learningObjectives.map((objective, index) => (
-              <li key={index} className="flex items-start gap-2">
-                <CheckCircle className={`w-5 h-5 flex-shrink-0 mt-0.5 ${
-                  index <= currentQuestion ? 'text-green-500' : 'text-gray-300'
-                }`} />
-                <span className={index <= currentQuestion ? 'font-medium' : 'text-gray-500'}>
-                  {objective}
-                </span>
-              </li>
-            ))}
-          </ul>
         </CardContent>
       </Card>
     </div>

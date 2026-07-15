@@ -33,10 +33,10 @@ export default function SandboxPage() {
     // Check device date and get current term
     const term = getCurrentTerm();
     setCurrentTerm(term);
-    
+
     const warning = getDateWarningMessage();
     setDateWarning(warning);
-    
+
     // Load activities for this grade and subject (with term filtering)
     const allActivities = getActivitiesForGradeSubject(grade, subject, true);
     setActivities(allActivities);
@@ -48,11 +48,15 @@ export default function SandboxPage() {
       setCompletedActivityIds(progress.completedActivityIds || []);
       setTotalPoints(progress.totalPoints || 0);
       setCurrentStreak(progress.currentStreak || 0);
+    } else {
+      setCompletedActivityIds([]);
+      setTotalPoints(0);
+      setCurrentStreak(0);
     }
+  }, [grade, subject]);
 
-    // Get recommended activities
-    const recommended = getRecommendedActivities(grade, subject, completedActivityIds);
-    setRecommendedActivities(recommended);
+  useEffect(() => {
+    setRecommendedActivities(getRecommendedActivities(grade, subject, completedActivityIds));
   }, [grade, subject, completedActivityIds]);
 
   const handleBack = () => {

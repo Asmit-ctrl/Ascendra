@@ -118,10 +118,10 @@ export async function checkRateLimit(
     // Set expiry on the key
     pipeline.expire(key, config.window);
 
-    const results = await pipeline.exec();
+    await pipeline.exec();
 
-    // Extract count (result of zcard)
-    const count = (results[1] as number) || 0;
+    // Extract count (result of zcard) using zcard for a properly typed response
+    const count = (await client.zcard(key)) as number;
 
     const remaining = Math.max(0, config.limit - count - 1);
     const success = count < config.limit;
@@ -129,10 +129,19 @@ export async function checkRateLimit(
     // Calculate reset time (when the oldest request in window expires)
     let reset = config.window;
     if (count > 0) {
-      const oldestTimestamp = await client.zrange(key, 0, 0, { withScores: true });
+      const oldestTimestamp = (await client.zrange(key, 0, 0, { withScores: true })) as any;
       if (oldestTimestamp && oldestTimestamp.length > 0) {
-        const oldestTime = oldestTimestamp[0].score;
-        reset = Math.ceil((oldestTime + config.window * 1000 - now) / 1000);
+        let oldestTime: number | null = null;
+        const first = oldestTimestamp[0];
+        if (first && typeof first === 'object') {
+          if ('score' in first) oldestTime = Number(first.score);
+          else if (Array.isArray(first) && first.length > 1) oldestTime = Number(first[1]);
+        } else if (!isNaN(Number(first))) {
+          oldestTime = Number(first);
+        }
+        if (oldestTime !== null) {
+          reset = Math.ceil((oldestTime + config.window * 1000 - now) / 1000);
+        }
       }
     }
 

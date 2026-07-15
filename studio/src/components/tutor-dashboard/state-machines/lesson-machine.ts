@@ -234,14 +234,14 @@ export const lessonMachine = setup({
   initial: 'idle',
   context: ({ input }: { input: Partial<LessonContext> }) => ({
     studentId: input.studentId || '',
-    lessonScript: input.lessonScript!,
+    lessonScript: (input.lessonScript as LessonScript) || ({} as LessonScript),
     currentNodeId: input.lessonScript?.initialNode || '',
     completedNodes: input.completedNodes || [],
     attempts: input.attempts || {},
     hintsUsed: input.hintsUsed || {},
     startTime: input.startTime || Date.now(),
     interactions: input.interactions || [],
-    activeWidgets: {},
+    activeWidgets: {} as Record<string, WidgetAgentActor>,
   }),
   states: {
     idle: {

@@ -61,6 +61,7 @@ export async function submitActivity(
         difficulty: submission.difficulty,
         score: submission.score,
         time_spent: submission.time_spent,
+        completed_at: new Date().toISOString(),
         answers: submission.answers || null,
         feedback: submission.feedback || null,
       })

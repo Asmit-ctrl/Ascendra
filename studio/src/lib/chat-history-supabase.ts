@@ -203,12 +203,11 @@ export async function addChatMessage(
     throw error;
   }
 
-  // Update session's last_message_at and message_count
+  // Update session's last_message_at. Message count is optional.
   await supabase
     .from('chat_sessions')
     .update({
       last_message_at: new Date().toISOString(),
-      message_count: supabase.rpc('increment', { row_id: sessionId }),
     })
     .eq('id', sessionId);
 
@@ -303,33 +302,46 @@ export async function migrateLocalStorageHistory(
   let migrated = 0;
   let failed = 0;
 
-  // Get all localStorage keys that match the chat history pattern
   const keys = Object.keys(localStorage).filter((key) =>
     key.startsWith('socraticChat.v1:')
   );
 
   for (const key of keys) {
     try {
-      const [, studentId, subject] = key.split(':');
-      if (studentId !== userId) continue; // Skip other users' data
+      const [, storedUserId, encodedSubject] = key.split(':');
+      if (storedUserId !== userId) continue;
 
-      const data = localStorage.getItem(key);
-      if (!data) continue;
+      const subject = decodeURIComponent(encodedSubject || '');
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
 
-      const messages = JSON.parse(data);
-      if (!Array.isArray(messages) || messages.length === 0) continue;
+      const envelope = JSON.parse(raw) as { messages?: unknown } | null;
+      if (!envelope || !Array.isArray(envelope.messages) || envelope.messages.length === 0) {
+        localStorage.removeItem(key);
+        continue;
+      }
 
-      // Create a new session
+      const messages = envelope.messages.filter(
+        (msg): msg is { role: 'user' | 'assistant'; content: string } =>
+          typeof msg === 'object' &&
+          msg !== null &&
+          (msg as Record<string, unknown>).role in { user: 1, assistant: 1 } &&
+          typeof (msg as Record<string, unknown>).content === 'string'
+      );
+
+      if (messages.length === 0) {
+        localStorage.removeItem(key);
+        continue;
+      }
+
       const sessionId = await createChatSession(userId, subject, grade, 'socratic');
 
-      // Add all messages
       for (const msg of messages) {
         await addChatMessage(sessionId, userId, msg.role, msg.content, {
-          choices: msg.choices,
+          choices: undefined,
         });
       }
 
-      // Remove from localStorage after successful migration
       localStorage.removeItem(key);
       migrated++;
     } catch (error) {

@@ -11,12 +11,16 @@
  * component which POSTs to /api/chat.
  */
 
-import { use, useEffect, useState } from 'react';
+import { useEffect, useState, use } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { StudentHeader } from '@/components/layout/student-header';
 import { SocraticChat } from '@/components/student/socratic-chat';
+import { AdaptiveDifficultyDisplay } from '@/components/student/adaptive-difficulty-display';
+import { ChatModeSelector, type ChatMode } from '@/components/student/chat-mode-selector';
+import { LearningPathProgress } from '@/components/student/learning-path-progress';
 import { getStudentId } from '@/lib/auth/student-id';
 import { tutorLabelFor } from '@/lib/grade-greetings';
+import { Card } from '@/components/ui/card';
 
 const STORAGE_GRADE = 'learningJourney.grade';
 const DEFAULT_GRADE = 'Grade 4';
@@ -35,6 +39,10 @@ export default function StudentChatPage({ params }: PageProps) {
   const [grade, setGrade] = useState<string>(DEFAULT_GRADE);
   const [studentId, setStudentId] = useState<string>('user1');
   const [studentName, setStudentName] = useState<string>('Mwanafunzi');
+  const [language, setLanguage] = useState<'english' | 'kiswahili' | 'mixed'>('mixed');
+  const [chatMode, setChatMode] = useState<ChatMode>('socratic');
+  const [showAdaptiveDifficulty, setShowAdaptiveDifficulty] = useState(true);
+  const [competencyCode, setCompetencyCode] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     const queryGrade = searchParams.get('grade');
@@ -52,6 +60,20 @@ export default function StudentChatPage({ params }: PageProps) {
         window.localStorage.getItem('studentName') ||
         window.localStorage.getItem('userName');
       if (name) setStudentName(name);
+
+      const savedLanguage = window.localStorage.getItem('preferredLanguage');
+      if (
+        savedLanguage === 'english' ||
+        savedLanguage === 'kiswahili' ||
+        savedLanguage === 'mixed'
+      ) {
+        setLanguage(savedLanguage);
+      }
+
+      const savedMode = window.localStorage.getItem('chatMode.preferred');
+      if (savedMode === 'socratic' || savedMode === 'homework-help' || savedMode === 'compass') {
+        setChatMode(savedMode as ChatMode);
+      }
     }
   }, [searchParams]);
 
@@ -59,22 +81,73 @@ export default function StudentChatPage({ params }: PageProps) {
     <div className="min-h-screen bg-background flex flex-col">
       <StudentHeader showBackButton onBack={() => router.push('/student/journey')} />
 
-      <main className="flex-1 container mx-auto px-4 py-6 max-w-3xl flex flex-col">
-        <div className="mb-4">
-          <h1 className="text-2xl font-bold">Mwalimu AI · {subject}</h1>
-          <p className="text-sm text-muted-foreground">
-            {grade} · {tutorLabelFor(grade)}
-          </p>
+      <main className="flex-1 container mx-auto px-4 py-6 max-w-6xl flex flex-col gap-4">
+        <div className="flex items-center justify-between gap-4 flex-col md:flex-row">
+          <div>
+            <h1 className="text-2xl font-bold">Mwalimu AI · {subject}</h1>
+            <p className="text-sm text-muted-foreground">
+              {grade} · {tutorLabelFor(grade)}
+            </p>
+          </div>
+          <ChatModeSelector
+            currentMode={chatMode}
+            onModeChange={(m) => {
+              setChatMode(m);
+              if (typeof window !== 'undefined') {
+                window.localStorage.setItem('chatMode.preferred', m);
+              }
+            }}
+          />
         </div>
 
-        <div className="flex-1 min-h-0">
-          <SocraticChat
-            studentId={studentId}
-            studentName={studentName}
-            grade={grade}
-            subject={subject}
-            language="mixed"
-          />
+        <div className="grid gap-4 lg:grid-cols-4">
+          <div className="lg:col-span-3 min-h-96">
+            <SocraticChat
+              studentId={studentId}
+              studentName={studentName}
+              grade={grade}
+              subject={subject}
+              language={language}
+                mode={chatMode}
+                competencyCode={competencyCode}
+            />
+          </div>
+
+          <aside className="space-y-4">
+            {/* Learning Path Progress */}
+            <LearningPathProgress
+              subject={subject}
+              grade={grade}
+              userId={studentId}
+              onSelectCheckpoint={(code) => {
+                // When user clicks a checkpoint, guide the chat to that topic
+                console.log('Selected checkpoint:', code);
+                setCompetencyCode(code);
+                // switch to homework help mode to guide step-by-step
+                setChatMode('homework-help');
+                if (typeof window !== 'undefined') {
+                  window.localStorage.setItem('chatMode.preferred', 'homework-help');
+                }
+              }}
+            />
+
+            {/* Adaptive Difficulty Display */}
+            {showAdaptiveDifficulty && (
+              <Card className="p-3">
+                <button
+                  onClick={() => setShowAdaptiveDifficulty(false)}
+                  className="text-xs text-gray-500 hover:text-gray-700 float-right"
+                >
+                  ✕
+                </button>
+                <AdaptiveDifficultyDisplay
+                  userId={studentId}
+                  competencyCode={subject}
+                  subject={subject}
+                />
+              </Card>
+            )}
+          </aside>
         </div>
       </main>
     </div>

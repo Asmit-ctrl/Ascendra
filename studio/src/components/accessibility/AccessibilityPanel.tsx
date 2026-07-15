@@ -32,6 +32,7 @@ interface AccessibilitySettings {
   switchControl: boolean;
   largeTargets: boolean;
   reducedMotion: boolean;
+  lowBandwidthMode: boolean;
   
   // Cognitive
   simplifiedLanguage: 'standard' | 'simple' | 'very-simple';
@@ -63,6 +64,7 @@ const defaultSettings: AccessibilitySettings = {
   switchControl: false,
   largeTargets: false,
   reducedMotion: false,
+  lowBandwidthMode: false,
   simplifiedLanguage: 'standard',
   visualSchedule: false,
   focusMode: false,
@@ -125,6 +127,15 @@ export function AccessibilityPanel() {
       root.classList.add('reduce-motion');
     } else {
       root.classList.remove('reduce-motion');
+    }
+
+    // Low bandwidth mode
+    if (settings.lowBandwidthMode) {
+      root.classList.add('low-bandwidth');
+      root.setAttribute('data-bandwidth-mode', 'low');
+    } else {
+      root.classList.remove('low-bandwidth');
+      root.removeAttribute('data-bandwidth-mode');
     }
     
     // Large targets
@@ -432,6 +443,18 @@ export function AccessibilityPanel() {
                         id="reduced-motion"
                         checked={settings.reducedMotion}
                         onCheckedChange={(checked) => updateSetting('reducedMotion', checked)}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label htmlFor="low-bandwidth">Low Bandwidth Mode</Label>
+                        <p className="text-sm text-muted-foreground">Reduce decorative visuals and save data</p>
+                      </div>
+                      <Switch
+                        id="low-bandwidth"
+                        checked={settings.lowBandwidthMode}
+                        onCheckedChange={(checked) => updateSetting('lowBandwidthMode', checked)}
                       />
                     </div>
                   </div>
