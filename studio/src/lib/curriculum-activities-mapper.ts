@@ -130,41 +130,96 @@ function getActivityIcon(subStrandTitle: string, subject: SubjectId): string {
 /**
  * Generate actual questions from curriculum sub-strand data
  */
-function generateQuestionsFromCurriculum(
+interface QuestionGenerationContext {
+  grade?: string;
+  difficulty?: number;
+}
+
+function inferLearnerProfile(grade: string, difficulty?: number) {
+  const numericGrade = Number.parseInt((grade || 'g2').replace(/\D/g, ''), 10) || 2;
+  const levelScore = (numericGrade - 2) + (difficulty ?? 1);
+
+  if (levelScore <= 2) return { label: 'early', voice: 'simple' as const };
+  if (levelScore <= 5) return { label: 'developing', voice: 'guided' as const };
+  if (levelScore <= 8) return { label: 'secure', voice: 'analytical' as const };
+  return { label: 'advanced', voice: 'deep' as const };
+}
+
+function personalizePrompt(baseQuestion: string, subject: string, grade: string, difficulty?: number) {
+  const profile = inferLearnerProfile(grade, difficulty);
+  const gradeLabel = grade.toUpperCase().replace(/G/, 'Grade ');
+
+  if (subject === 'kiswahili') {
+    const prefix = profile.label === 'advanced'
+      ? 'Chagua jibu sahihi zaidi'
+      : 'Chagua jibu sahihi';
+    return `${prefix}: ${baseQuestion}`;
+  }
+
+  const prefix = profile.label === 'advanced'
+    ? `For ${gradeLabel} learners, choose the most accurate response:`
+    : profile.label === 'secure'
+      ? `Choose the best answer for this ${gradeLabel} task:`
+      : profile.label === 'developing'
+        ? `Pick the best answer for this ${subject} activity:`
+        : `Choose the best answer:`;
+
+  return `${prefix} ${baseQuestion}`;
+}
+
+function personalizeHint(baseHint: string, grade: string, difficulty?: number) {
+  const profile = inferLearnerProfile(grade, difficulty);
+  if (profile.label === 'advanced') return `${baseHint} Think about the full idea, not just one keyword.`;
+  if (profile.label === 'secure') return `${baseHint} Use the clues in the question and topic.`;
+  if (profile.label === 'developing') return `${baseHint} Focus on the key words in the prompt.`;
+  return `${baseHint} Listen carefully for the main idea.`;
+}
+
+export function generateQuestionsFromCurriculum(
   subStrand: any,
-  subject: SubjectId
+  subject: SubjectId | string,
+  context: QuestionGenerationContext = {}
 ): Array<{ question: string; options: string[]; correctAnswer: number; hint: string }> {
   const questions: Array<{ question: string; options: string[]; correctAnswer: number; hint: string }> = [];
-  
-  // Use key inquiry questions as the base for questions
+
   const inquiryQuestions = subStrand.key_inquiry_questions || [];
   const learningOutcomes = subStrand.learning_outcomes || [];
   const suggestedActivities = subStrand.suggested_activities || [];
-  
-  // Generate questions based on learning outcomes and inquiry questions
+  const combinedText = [
+    ...learningOutcomes,
+    ...suggestedActivities,
+    ...inquiryQuestions,
+  ].join(' ').toLowerCase();
+  const grade = context.grade || 'g2';
+  const difficulty = context.difficulty;
+
   for (let i = 0; i < Math.min(3, learningOutcomes.length); i++) {
-    const outcome = learningOutcomes[i];
+    const outcome = learningOutcomes[i] || '';
     const inquiryQ = inquiryQuestions[i] || inquiryQuestions[0] || 'What did you learn?';
-    
-    // Create contextual questions based on subject and content
+
     let question = inquiryQ;
     let options: string[] = [];
     let correctAnswer = 0;
     let hint = '';
-    
+
+    const isGrammarTopic = /grammar|usage|matumizi|sentence|punctuation|kiulizi|-ako|-enu/.test(combinedText);
+    const isPronunciationTopic = /sound|pronunciation|phonics|sauti|silabi|\/ny\/|\/ng\/|matamshi/.test(combinedText);
+    const isComprehensionTopic = /read|reading|story|text|comprehension|understand|hadithi|ufahamu/.test(combinedText);
+    const isScienceTopic = /scientific|experiment|hypothesis|observe|energy|matter|cells|organism|process|system|environment/.test(combinedText);
+
     if (subject === 'english') {
-      if (outcome.includes('distinguish') || outcome.includes('recognize')) {
+      if (isPronunciationTopic || outcome.includes('sound') || outcome.includes('pronunciation')) {
         question = 'Which word has the correct letter-sound combination?';
         options = ['blue (bl)', 'bule (bl)', 'bleu (bl)', 'bloo (bl)'];
         hint = 'Listen carefully to the sound at the beginning of the word.';
-      } else if (outcome.includes('read') || outcome.includes('fluency')) {
+      } else if (isGrammarTopic || outcome.includes('grammar') || outcome.includes('sentence')) {
+        question = 'Which sentence uses the correct grammar and word choice?';
+        options = ['She is reading a book.', 'She are reading a book.', 'She reading a book.', 'She am reading a book.'];
+        hint = 'Think about the subject and the verb that fit together.';
+      } else if (isComprehensionTopic || outcome.includes('read') || outcome.includes('fluency')) {
         question = 'What should you do when reading aloud?';
         options = ['Read at the right speed with expression', 'Read as fast as possible', 'Skip difficult words', 'Read without pausing'];
         hint = 'Good reading includes proper speed and expression.';
-      } else if (outcome.includes('comprehension') || outcome.includes('understand')) {
-        question = 'How do pictures help us understand a story?';
-        options = ['They show what the story is about', 'They make the book colorful', 'They take up space', 'They are just decorations'];
-        hint = 'Pictures give us clues about the story content.';
       } else if (outcome.includes('write') || outcome.includes('handwriting')) {
         question = 'Why is it important to write neatly?';
         options = ['So others can read our writing', 'To use more paper', 'To write slowly', 'To make it look fancy'];
@@ -175,7 +230,20 @@ function generateQuestionsFromCurriculum(
         hint = outcome.substring(0, 50) + '...';
       }
     } else if (subject === 'kiswahili') {
-      if (outcome.includes('kutambua') || outcome.includes('tambua')) {
+      const usesSoundPatterns = /sauti lengwa|\/ny\/|\/ng\/|silabi/.test(combinedText);
+      const usesPossessiveForms = /-ako|-enu|matumizi ya/.test(combinedText);
+
+      if (usesPossessiveForms && /-ako|-enu/.test(combinedText)) {
+        question = 'Ni sentensi gani ina matumizi sahihi ya -ako na -enu?';
+        options = ['Mtoto wako anapenda nyumba yenu.', 'Mtoto wangu anapenda nyumba ya yako.', 'Mtoto wangu anapenda nyumba na yako.', 'Mtoto wangu anapenda nyumba yetu.'];
+        correctAnswer = 0;
+        hint = 'Fikiria jinsi tunavyotumia -ako na -enu kuonyesha umiliki wa mtu mmoja au watu wengi.';
+      } else if (usesSoundPatterns) {
+        question = 'Ni neno gani lina sauti /ny/ na /ng/ kwenye silabi zake?';
+        options = ['nyanya', 'nguo', 'mwana', 'kiti'];
+        correctAnswer = 0;
+        hint = 'Fikiria sauti ya kwanza na ya mwisho ya neno; sauti hizi huonekana katika maneno ya sauti lengwa.';
+      } else if (outcome.includes('kutambua') || outcome.includes('tambua')) {
         question = 'Ni neno gani lina sauti ya /p/?';
         options = ['paka', 'baba', 'taka', 'dada'];
         hint = 'Sikiliza sauti ya kwanza ya neno.';
@@ -234,14 +302,35 @@ function generateQuestionsFromCurriculum(
         options = ['Practice counting and solving problems', 'Skip the hard questions', 'Only do easy math', 'Avoid using objects'];
         hint = outcome.substring(0, 50) + '...';
       }
+    } else if (isScienceTopic || subject === 'science') {
+      if (outcome.includes('experiment') || combinedText.includes('experiment')) {
+        question = 'Which step comes next in a simple experiment?';
+        options = ['Record the result', 'Skip the test', 'Ignore the materials', 'Guess without observing'];
+        hint = 'Science investigations depend on careful observation and recording.';
+      } else if (outcome.includes('energy') || combinedText.includes('energy')) {
+        question = 'Which source provides energy to a plant?';
+        options = ['Sunlight', 'Rock', 'Shadow', 'Water bottle'];
+        hint = 'Plants need light to make food.';
+      } else {
+        question = 'Which statement best explains the main idea of this science topic?';
+        options = ['It describes the key concept clearly', 'It is unrelated to the topic', 'It gives a random example', 'It avoids evidence'];
+        hint = 'Focus on the main concept and the evidence that supports it.';
+      }
+    } else {
+      question = inquiryQ;
+      options = ['Choose the best answer', 'Pick an option that fits the topic', 'Review the lesson idea', 'Try again later'];
+      hint = outcome.substring(0, 50) + '...';
     }
-    
+
+    question = personalizePrompt(question, String(subject), grade, difficulty);
+    hint = personalizeHint(hint || 'Use the clues in the lesson.', grade, difficulty);
+
     questions.push({ question, options, correctAnswer, hint });
   }
-  
+
   return questions.length > 0 ? questions : [
     {
-      question: inquiryQuestions[0] || 'What did you learn from this lesson?',
+      question: personalizePrompt(inquiryQuestions[0] || 'What did you learn from this lesson?', String(subject), grade, difficulty),
       options: [
         learningOutcomes[0]?.substring(0, 40) || 'The main concept',
         'Something different',
@@ -249,7 +338,7 @@ function generateQuestionsFromCurriculum(
         'I need to review'
       ],
       correctAnswer: 0,
-      hint: 'Think about the learning outcomes for this activity.'
+      hint: personalizeHint('Think about the learning outcomes for this activity.', grade, difficulty)
     }
   ];
 }

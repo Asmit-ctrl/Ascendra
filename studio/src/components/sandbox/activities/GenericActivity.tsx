@@ -11,6 +11,13 @@ import { Sparkles, Lightbulb, CheckCircle } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { submitActivity } from '@/lib/sandbox-submission';
 import { useAuth } from '@/hooks/use-auth';
+import {
+  buildFallbackHint,
+  buildFallbackOptions,
+  buildFallbackPrompt,
+  inferAdaptiveProfile,
+  personalizePrompt,
+} from '@/lib/sandbox-personalization';
 
 interface GenericActivityProps {
   activity: Activity;
@@ -39,7 +46,10 @@ export default function GenericActivity({ activity, onComplete, onBack }: Generi
   const [isCorrect, setIsCorrect] = useState(false);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [startTime] = useState(Date.now());
+  const [streak, setStreak] = useState(0);
+  const [accuracy, setAccuracy] = useState(0.5);
 
+  const profile = inferAdaptiveProfile(activity.grade, activity.difficulty, streak, accuracy);
   const questions = generateQuestionsFromActivity(activity);
   const totalQuestions = questions.length;
   const progress = ((currentQuestion + 1) / totalQuestions) * 100;
@@ -81,99 +91,26 @@ export default function GenericActivity({ activity, onComplete, onBack }: Generi
         question: generateQuestionFromObjective(objective, activity),
         options: shuffledOptions,
         correctAnswer,
-        hint: generateHintFromObjective(objective),
+        hint: generateHintFromObjective(objective, activity),
         explanation: `Great! ${objective}`,
       };
     });
   }
 
+  function personalizeFallbackPrompt(question: string, activity: Activity) {
+    return personalizePrompt(question, activity.subject, activity.grade, activity.difficulty, profile);
+  }
+
   function generateQuestionFromObjective(objective: string, activity: Activity): string {
-    const subject = activity.subject;
-
-    if (subject === 'mathematics') {
-      if (objective.includes('count')) return 'Count the objects and choose the correct number:';
-      if (objective.includes('add')) return 'What is 5 + 3?';
-      if (objective.includes('subtract')) return 'What is 10 - 4?';
-      if (objective.includes('shape')) return 'Which shape has 4 equal sides?';
-    }
-
-    if (subject === 'english') {
-      if (objective.includes('sound')) return "Which word starts with the 'b' sound?";
-      if (objective.includes('read')) return 'What is the main idea of this story?';
-      if (objective.includes('write')) return 'Which sentence is correct?';
-    }
-
-    if (subject === 'kiswahili') {
-      if (objective.includes('sauti')) return "Neno gani linaanza na sauti ya 'm'?";
-      if (objective.includes('soma')) return 'Hadithi hii inahusu nini?';
-    }
-
-    if (subject === 'environmental') {
-      if (objective.includes('plant')) return 'Which of these is a plant?';
-      if (objective.includes('animal')) return 'Which animal lives in water?';
-      if (objective.includes('weather')) return 'What do we wear when it rains?';
-    }
-
-    if (subject === 'cre') {
-      const obj = objective.toLowerCase();
-      if (obj.includes('creation') || obj.includes('created')) return 'What did God create on the first day?';
-      if (obj.includes('identify things')) return 'Which of these did God create?';
-      if (obj.includes('appreciate')) return 'How can we appreciate God\'s creation?';
-      if (obj.includes('prayer')) return 'When should we pray?';
-      if (obj.includes('good deed') || obj.includes('kindness')) return 'Which of these is a good deed?';
-      if (obj.includes('bible') || obj.includes('hero')) return 'Who is a hero from the Bible?';
-    }
-
-    if (subject === 'creative') {
-      if (objective.includes('shape')) return 'Which shape can you use to draw a house?';
-      if (objective.includes('rhythm')) return 'Which action shows rhythm?';
-    }
-
-    return `Let's practice: ${objective}`;
+    return buildFallbackPrompt(activity.subject, objective, activity.grade, activity.difficulty, profile);
   }
 
   function generateOptionsForObjective(objective: string, activity: Activity): string[] {
-    const subject = activity.subject;
-    if (subject === 'mathematics') {
-      if (objective.includes('count')) return ['8', '6', '10', '7'];
-      if (objective.includes('add')) return ['8', '7', '9', '6'];
-      if (objective.includes('shape')) return ['Square', 'Triangle', 'Circle', 'Rectangle'];
-    }
-
-    if (subject === 'english') {
-      if (objective.includes('sound')) return ['Ball', 'Cat', 'Dog', 'Apple'];
-      if (objective.includes('sentence')) return ['I am happy.', 'i am happy', 'I am happy', 'i Am happy'];
-    }
-
-    if (subject === 'kiswahili') {
-      return ['Mama', 'Baba', 'Dada', 'Kaka'];
-    }
-
-    if (subject === 'environmental') {
-      if (objective.includes('plant')) return ['Tree', 'Car', 'Book', 'Chair'];
-      if (objective.includes('animal')) return ['Fish', 'Table', 'Pen', 'Cup'];
-      if (objective.includes('weather') || objective.includes('rain')) return ['Raincoat', 'Shorts', 'Sunglasses', 'Swimming suit'];
-      if (objective.includes('sun') || objective.includes('hot')) return ['Hat', 'Jacket', 'Boots', 'Scarf'];
-      if (objective.includes('cold')) return ['Sweater', 'Shorts', 'Sandals', 'T-shirt'];
-      if (objective.includes('water')) return ['River', 'Chair', 'Book', 'Pencil'];
-      if (objective.includes('food')) return ['Apple', 'Stone', 'Paper', 'Stick'];
-    }
-
-    if (subject === 'cre') {
-      const obj = objective.toLowerCase();
-      if (obj.includes('creation')) return ['Light', 'Animals', 'Plants', 'People'];
-      if (obj.includes('identify things') || obj.includes('created')) return ['Sun', 'Cars', 'Phones', 'Houses'];
-      if (obj.includes('appreciate')) return ['Care for nature', 'Waste water', 'Litter', 'Cut trees'];
-      if (obj.includes('prayer')) return ['Anytime', 'Never', 'Only Sunday', 'Only morning'];
-      if (obj.includes('good deed') || obj.includes('kindness') || obj.includes('help')) return ['Helping a friend', 'Lying', 'Stealing', 'Shouting'];
-      if (obj.includes('bible') || obj.includes('hero') || obj.includes('character')) return ['Moses', 'A teacher', 'A doctor', 'A driver'];
-    }
-
-    return ['Yes', 'No', 'Sometimes', 'I don\'t know'];
+    return buildFallbackOptions(activity.subject, objective);
   }
 
-  function generateHintFromObjective(objective: string): string {
-    return `Think about: ${objective.toLowerCase()}`;
+  function generateHintFromObjective(objective: string, activity: Activity): string {
+    return buildFallbackHint(activity.subject, objective);
   }
 
   const handleAnswerSelect = (answer: string, index: number) => {
@@ -187,6 +124,8 @@ export default function GenericActivity({ activity, onComplete, onBack }: Generi
 
     if (correct) {
       setScore(score + 20);
+      setAccuracy(prev => (prev * 0.8) + 0.95 * 0.2);
+      setStreak(prev => prev + 1);
       setFeedbackMessage(currentQ.explanation);
       confetti({
         particleCount: 50,
@@ -194,6 +133,8 @@ export default function GenericActivity({ activity, onComplete, onBack }: Generi
         origin: { y: 0.7 },
       });
     } else {
+      setAccuracy(prev => (prev * 0.8) + 0.25 * 0.2);
+      setStreak(0);
       setFeedbackMessage('Not quite! Try again or use a hint.');
     }
 

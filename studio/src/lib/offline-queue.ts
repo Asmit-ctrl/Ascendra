@@ -388,7 +388,13 @@ export function useOfflineQueue() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setStatus(offlineQueue.getStatus());
+      const next = offlineQueue.getStatus();
+      setStatus((prev) => {
+        if (prev.count === next.count && prev.processing === next.processing && prev.online === next.online) {
+          return prev;
+        }
+        return next;
+      });
     }, 1000);
 
     return () => clearInterval(interval);
