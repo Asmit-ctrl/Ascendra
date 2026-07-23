@@ -42,6 +42,7 @@ import {
 import { getDemoBadges } from '@/lib/gamification/badges';
 import { getStudentId } from '@/lib/auth/student-id';
 import { CompetencyMap } from '@/components/student/competency-map';
+import { FloatingConceptChat } from '@/components/student/floating-concept-chat';
 
 interface StudentProfile {
   id: string;
@@ -706,6 +707,11 @@ export default function StudentDashboardPage() {
           )}
         </div>
       </main>
+      <FloatingConceptChat
+        studentName={studentName}
+        grade={profile?.grade}
+        language={profile?.preferredLanguage ?? 'mixed'}
+      />
     </div>
   );
 }

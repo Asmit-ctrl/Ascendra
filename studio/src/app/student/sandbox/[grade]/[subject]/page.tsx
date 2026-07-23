@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { StudentHeader } from '@/components/layout/student-header';
+import { FloatingConceptChat } from '@/components/student/floating-concept-chat';
 import { ArrowLeft, Clock, Target, Trophy, Star, Lock, Calendar, AlertTriangle, Info } from 'lucide-react';
 import { getActivitiesForGradeSubject, getRecommendedActivities, getTermStatistics } from '@/lib/sandbox-activities';
 import { Activity, GradeId, SubjectId } from '@/lib/sandbox-types';
@@ -60,7 +61,7 @@ export default function SandboxPage() {
   }, [grade, subject, completedActivityIds]);
 
   const handleBack = () => {
-    router.push('/student/journey?step=subject');
+    router.push('/student/sandbox');
   };
 
   const isActivityLocked = (activity: Activity): boolean => {
@@ -295,6 +296,11 @@ export default function SandboxPage() {
           </Card>
         )}
       </div>
+      <FloatingConceptChat
+        studentName="Student"
+        grade={getGradeName(grade)}
+        subject={getSubjectName(subject)}
+      />
     </div>
   );
 }

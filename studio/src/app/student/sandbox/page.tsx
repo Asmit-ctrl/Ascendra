@@ -1,518 +1,155 @@
 'use client'
 
-/**
- * /student/sandbox — merged catalogue + telemetry playground.
- *
- * Previously this page hardcoded two activities (Fraction Builder G4
- * and Counting Tokens G1) and never used the Grade 2 catalogue that
- * lives in `src/lib/sandbox-activities.ts`. It now drives the same
- * `InteractiveSandbox` component from that catalogue, so every
- * Grade 2 activity that has a `manipulative` field becomes a
- * canvas-based lesson with the existing MeTTa telemetry pipeline.
- *
- * Design notes (informed by Synthesis Tutor research):
- *
- *   - The picker is sticky on desktop, not collapsing. The user
- *     explicitly chose "picker + sandbox" over the diagnostic-only
- *     experience, so we keep both visible.
- *   - Activities that haven't been classified into a manipulative yet
- *     fall through to a "Open in classic view" deep-link that routes
- *     to `/student/sandbox/[grade]/[subject]/[activityId]` and renders
- *     `GenericActivity` (the worksheet renderer). No silent fallback
- *     inside the canvas — that would lie in the telemetry stream.
- *   - Micro-assessment gating happens INSIDE `InteractiveSandbox` when
- *     the activity has `variations`. The student must answer
- *     `masteryThreshold` correctly before the lesson is marked done.
- *   - The student's grade is read from `localStorage.studentGrade`
- *     after hydration. The registry currently only contains Grade 2,
- *     so any other grade falls back to `g2` and we tell the user.
- */
-
-import { useEffect, useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { useAuth } from '@/hooks/use-auth'
+import { Check, ChevronRight, Sparkles } from 'lucide-react'
 import { StudentHeader } from '@/components/layout/student-header'
-import {
-  InteractiveSandbox,
-  type SandboxActivityType,
-  type SandboxVariation,
-  type SandboxCompletionResult,
-} from '@/components/student/interactive-sandbox'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Brain, Eye, Target, ExternalLink } from 'lucide-react'
-import {
-  getActivitiesForGradeSubject,
-  getRecommendedActivities,
-} from '@/lib/sandbox-activities'
-import { getStudentSubmissions, submitActivity } from '@/lib/sandbox-submission'
-import type {
-  Activity,
-  GradeId,
-  Manipulative,
-  SubjectId,
-} from '@/lib/sandbox-types'
+import { FloatingConceptChat } from '@/components/student/floating-concept-chat'
+import type { SubjectId } from '@/lib/sandbox-types'
 
-// ---- Mapping ----------------------------------------------------------------
-
-/**
- * Map an activity's `manipulative` to the legacy `SandboxActivityType`
- * the canvas component currently understands. We keep the legacy slugs
- * stable so backend dashboards continue to roll up to the same bucket.
- * Unmapped manipulatives (e.g. shapes / number-line) return `null` —
- * the page treats them as un-canvasable and offers the deep-link.
- */
-function manipulativeToActivityType(
-  m: Manipulative | undefined,
-): SandboxActivityType | null {
-  switch (m) {
-    case 'fraction-bars':
-      return 'fractions'
-    case 'tokens':
-      return 'counting'
-    default:
-      return null
-  }
+type SubjectCard = {
+  label: string
+  image: string
+  subject?: SubjectId
 }
 
-/**
- * Derive a variations list for the canvas. If the activity declares
- * its own variations we use them; otherwise we fall back to a
- * single-shot from `targetValue` so the sandbox still has something
- * to grade.
- */
-function variationsFor(activity: Activity): SandboxVariation[] | undefined {
-  if (activity.variations && activity.variations.length > 0) {
-    return activity.variations.map((v) => ({
-      question: v.question,
-      correctAnswerValue: v.targetValue,
-      correctAnswerLabel: v.targetLabel,
-    }))
-  }
-  if (activity.targetValue !== undefined) {
-    return [
-      {
-        question: activity.description,
-        correctAnswerValue: activity.targetValue,
-        correctAnswerLabel: activity.targetLabel,
-      },
-    ]
-  }
-  return undefined
-}
-
-// ---- Subject options --------------------------------------------------------
-
-const SUBJECTS: Array<{ id: SubjectId; label: string; emoji: string }> = [
-  { id: 'mathematics', label: 'Mathematics', emoji: '🧮' },
-  { id: 'english', label: 'English', emoji: '📖' },
-  { id: 'kiswahili', label: 'Kiswahili', emoji: '🗣️' },
-  { id: 'environmental', label: 'Environmental', emoji: '🌍' },
-  { id: 'cre', label: 'CRE', emoji: '✝️' },
-  { id: 'creative', label: 'Creative', emoji: '🎨' },
-  { id: 'indigenous', label: 'Indigenous Language', emoji: '🪘' },
+const CORE_SUBJECTS: SubjectCard[] = [
+  { label: 'English', subject: 'english', image: '/images/learning-catalog/english.png' },
+  { label: 'Kiswahili', subject: 'kiswahili', image: '/images/learning-catalog/kiswahili.png' },
+  { label: 'Mathematics', subject: 'mathematics', image: '/images/learning-catalog/mathematics.png' },
+  { label: 'Social Studies', image: '/images/learning-catalog/social-studies.png' },
+  { label: 'Creative Arts', subject: 'creative', image: '/images/learning-catalog/creative-arts.png' },
+  { label: 'Religious Education', subject: 'cre', image: '/images/learning-catalog/religious-education.png' },
+  { label: 'Environmental Activities', subject: 'environmental', image: '/images/learning-catalog/environmental-activities.png' },
+  { label: 'Indigenous Language', subject: 'indigenous', image: '/images/learning-catalog/indigenous-language.png' },
+  { label: 'Kenyan Sign Language', image: '/images/learning-catalog/kenyan-sign-language.png' },
 ]
 
-const REGISTRY_GRADE: GradeId = 'g2' // the only fully-authored grade today
+const RECOMMENDED_COURSES = [
+  { label: 'AI', image: '/images/learning-catalog/ai.png' },
+  { label: 'Blockchain', image: '/images/learning-catalog/blockchain.png' },
+  { label: 'Financial Literacy', image: '/images/learning-catalog/financial-literacy.png' },
+]
 
-// ---- Component --------------------------------------------------------------
+function LearningProgress() {
+  const steps = ['Level', 'Sub-Level', 'Grade', 'Subject']
+
+  return (
+    <ol className="mb-8 grid grid-cols-2 gap-y-5 sm:mb-10 sm:grid-cols-4 sm:gap-0" aria-label="Learning journey progress">
+      {steps.map((step, index) => {
+        const isCurrent = index === steps.length - 1
+        return (
+          <li key={step} className="relative flex min-w-0 items-center sm:block">
+            {index > 0 && (
+              <span className="absolute left-0 top-5 hidden h-1 w-full -translate-x-1/2 bg-emerald-500 sm:block" aria-hidden />
+            )}
+            <span
+              className={`relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-4 text-sm font-bold shadow-sm ${
+                isCurrent
+                  ? 'border-orange-200 bg-orange-500 text-white'
+                  : 'border-white bg-emerald-500 text-white'
+              }`}
+            >
+              {isCurrent ? '4' : <Check className="h-5 w-5" strokeWidth={3} />}
+            </span>
+            <span className="ml-3 text-sm font-semibold text-teal-700 sm:ml-0 sm:mt-2 sm:block">
+              {step}
+            </span>
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
+function ImageCard({
+  label,
+  image,
+  onClick,
+}: {
+  label: string
+  image: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group relative isolate h-40 overflow-hidden rounded-2xl border border-teal-100 bg-slate-950 text-left shadow-sm transition duration-200 hover:-translate-y-1 hover:border-teal-300 hover:shadow-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-teal-300 sm:h-44"
+    >
+      <img src={image} alt="" className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-105" />
+      <span className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/35 to-transparent" aria-hidden />
+      <span className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-4">
+        <span className="text-xl font-extrabold leading-tight tracking-tight text-white drop-shadow-md sm:text-2xl">
+          {label}
+        </span>
+        <ChevronRight className="h-5 w-5 shrink-0 text-white/80 transition group-hover:translate-x-1 group-hover:text-white" />
+      </span>
+    </button>
+  )
+}
 
 export default function SandboxPage() {
   const router = useRouter()
+  const [notice, setNotice] = useState<string | null>(null)
 
-  // Hydration-safe grade detection. We start `null` so the first render
-  // matches SSR; the useEffect below populates from localStorage and
-  // any subsequent renders use the resolved grade.
-  const { user } = useAuth()
-  const [studentGrade, setStudentGrade] = useState<GradeId | null>(null)
-  const [subject, setSubject] = useState<SubjectId>('mathematics')
-  const [selected, setSelected] = useState<Activity | null>(null)
-  const [completedIds, setCompletedIds] = useState<string[]>([])
-  const [totalPoints, setTotalPoints] = useState(0)
-  const [currentStreak, setCurrentStreak] = useState(0)
-
-  useEffect(() => {
-    const stored = localStorage.getItem('studentGrade')
-    const candidate = (stored ?? REGISTRY_GRADE) as GradeId
-    setStudentGrade(candidate)
-  }, [])
-
-  // The catalogue currently only covers Grade 2. Any other grade falls
-  // back to g2 — surfaced as a notice rather than hiding the mismatch.
-  const effectiveGrade: GradeId = REGISTRY_GRADE
-  const gradeMismatch =
-    studentGrade !== null && studentGrade !== REGISTRY_GRADE
-
-  // Activities and recommendations are derived state — memoised, not
-  // effect-managed (the deep-route page has a latent infinite-effect
-  // pattern we deliberately don't copy here).
-  const activities = useMemo<Activity[]>(
-    () => (studentGrade ? getActivitiesForGradeSubject(effectiveGrade, subject) : []),
-    [studentGrade, effectiveGrade, subject],
-  )
-
-  const recommended = useMemo<Activity[]>(
-    () =>
-      studentGrade
-        ? getRecommendedActivities(effectiveGrade, subject, completedIds)
-        : [],
-    [studentGrade, effectiveGrade, subject, completedIds],
-  )
-
-  useEffect(() => {
-    if (!user?.id) {
-      const raw = localStorage.getItem(`sandbox-progress-${effectiveGrade}-${subject}`)
-      if (!raw) {
-        setCompletedIds([])
-        setTotalPoints(0)
-        setCurrentStreak(0)
-        return
-      }
-
-      try {
-        const progress = JSON.parse(raw)
-        setCompletedIds((progress.completedActivityIds as string[]) ?? [])
-        setTotalPoints(progress.totalPoints ?? 0)
-        setCurrentStreak(progress.currentStreak ?? 0)
-      } catch (err) {
-        console.error('Failed to load sandbox progress from localStorage:', err)
-        setCompletedIds([])
-        setTotalPoints(0)
-        setCurrentStreak(0)
-      }
+  const openSubject = (card: SubjectCard) => {
+    if (!card.subject) {
+      setNotice(`${card.label} activities are being prepared for the next release.`)
       return
     }
 
-    let canceled = false
-
-    const getStreak = (dates: string[]) => {
-      const today = new Date()
-      const seen = new Set(dates)
-      let streak = 0
-      for (let offset = 0; offset < 30; offset += 1) {
-        const date = new Date(today)
-        date.setDate(today.getDate() - offset)
-        const key = date.toISOString().slice(0, 10)
-        if (seen.has(key)) {
-          streak += 1
-          continue
-        }
-        break
-      }
-      return streak
-    }
-
-    async function loadProgress() {
-      try {
-        const submissions = await getStudentSubmissions(user.id, 200)
-        if (canceled) return
-
-        const completedMap = new Map<string, number>()
-        const seenDates: string[] = []
-
-        submissions.forEach((submission) => {
-          if (submission.grade !== effectiveGrade || submission.subject !== subject) {
-            return
-          }
-          const answers = submission.answers as Record<string, unknown> | undefined
-          const id =
-            typeof answers?.activityId === 'string'
-              ? answers.activityId
-              : typeof answers?.lessonId === 'string'
-              ? answers.lessonId
-              : undefined
-          if (!id) return
-
-          const score = Number(submission.score) || 0
-          const existing = completedMap.get(id) ?? 0
-          completedMap.set(id, Math.max(existing, score))
-
-          if (submission.completed_at) {
-            const date = new Date(submission.completed_at)
-            if (!Number.isNaN(date.getTime())) {
-              seenDates.push(date.toISOString().slice(0, 10))
-            }
-          }
-        })
-
-        if (canceled) return
-
-        setCompletedIds([...completedMap.keys()])
-        setTotalPoints(
-          Array.from(completedMap.values()).reduce((sum, score) => sum + Math.round(score * 10), 0),
-        )
-        setCurrentStreak(getStreak(Array.from(new Set(seenDates))))
-      } catch (err) {
-        console.error('Failed to load sandbox progress from Supabase:', err)
-        setCompletedIds([])
-        setTotalPoints(0)
-        setCurrentStreak(0)
-      }
-    }
-
-    loadProgress()
-    return () => {
-      canceled = true
-    }
-  }, [effectiveGrade, subject, user?.id])
-
-  // Default selection: first recommended, else first activity in list.
-  useEffect(() => {
-    if (!studentGrade) return
-    const next = recommended[0] ?? activities[0] ?? null
-    setSelected(next)
-  }, [studentGrade, recommended, activities])
-
-  // ---- Completion handler --------------------------------------------------
-
-  const handleComplete = async (result: SandboxCompletionResult) => {
-    if (!selected || !result.mastered) return
-
-    const points = result.score * 10
-    setCompletedIds((prev) => (prev.includes(selected.id) ? prev : [...prev, selected.id]))
-    setTotalPoints((prev) => prev + points)
-
-    if (!user?.id) {
-      try {
-        const key = `sandbox-progress-${effectiveGrade}-${subject}`
-        const raw = localStorage.getItem(key)
-        const progress = raw
-          ? JSON.parse(raw)
-          : { completedActivityIds: [], totalPoints: 0, currentStreak: 0 }
-        if (!progress.completedActivityIds.includes(selected.id)) {
-          progress.completedActivityIds.push(selected.id)
-          progress.totalPoints =
-            (progress.totalPoints ?? 0) + points
-        }
-        localStorage.setItem(key, JSON.stringify(progress))
-      } catch (err) {
-        console.error('Failed to persist sandbox progress:', err)
-      }
-      return
-    }
-
-    try {
-      const difficultyLevel: 'easy' | 'medium' | 'hard' =
-        selected.difficulty <= 2 ? 'easy' : selected.difficulty <= 4 ? 'medium' : 'hard'
-
-      await submitActivity({
-        student_id: user.id,
-        activity_type: selected.type,
-        grade: selected.grade,
-        subject: selected.subject,
-        difficulty: difficultyLevel,
-        score: points,
-        time_spent: Math.ceil(result.timeSpent / 1000),
-        answers: {
-          activityId: selected.id,
-          mastered: true,
-          attempts: result.attempts.length,
-        },
-      })
-    } catch (err) {
-      console.error('Failed to persist sandbox progress to Supabase:', err)
-    }
+    router.push(`/student/sandbox/g2/${card.subject}`)
   }
 
-  // ---- Render --------------------------------------------------------------
-
-  const selectedActivityType = selected
-    ? manipulativeToActivityType(selected.manipulative)
-    : null
-  const selectedVariations = selected ? variationsFor(selected) : undefined
-  const canvasReady = selectedActivityType !== null && selectedVariations !== undefined
-
   return (
-    <div className="flex flex-col min-h-screen bg-background">
-      <StudentHeader showBackButton onBack={() => router.back()} />
-      <main className="flex-1 p-6">
-        <div className="max-w-6xl mx-auto space-y-6">
-          {/* Header */}
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold font-headline">
-              Practice Sandbox
-            </h1>
-            <p className="text-muted-foreground">
-              Move, drag, and try things out. Mwalimu is watching how you think — not just
-              whether you're right.
-            </p>
-            <div className="flex flex-wrap gap-2 mt-3">
-              <Badge variant="outline" className="gap-1">
-                <Brain className="h-3 w-3" /> Cognitive Data Streams
-              </Badge>
-              <Badge variant="outline" className="gap-1">
-                <Eye className="h-3 w-3" /> Live telemetry
-              </Badge>
-              <Badge variant="outline" className="gap-1">
-                <Target className="h-3 w-3" /> Mastery gating
-              </Badge>
-            </div>
-            {gradeMismatch && (
-              <div className="mt-3 rounded-md border bg-muted/30 p-3 text-sm">
-                We're showing <strong>Grade 2</strong> activities — that's the only
-                grade fully authored so far. Your account is set to{' '}
-                <strong>{studentGrade?.toUpperCase()}</strong>.
+    <div className="min-h-screen bg-teal-400 p-1 sm:p-2">
+      <div className="min-h-[calc(100vh-0.5rem)] overflow-hidden rounded-[1.6rem] bg-[#fffaf0] shadow-2xl sm:rounded-[2rem]">
+        <StudentHeader showBackButton onBack={() => router.push('/student')} variant="catalog" />
+
+        <main className="px-5 pb-16 pt-2 sm:px-8 lg:px-14">
+          <div className="mx-auto max-w-7xl">
+            <LearningProgress />
+
+            <section aria-labelledby="core-subjects-heading">
+              <div className="mb-5 flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-teal-600" />
+                <h2 id="core-subjects-heading" className="text-2xl font-extrabold text-teal-700 sm:text-3xl">
+                  Core Subjects
+                </h2>
+              </div>
+              <div className="grid grid-cols-1 gap-4 min-[430px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+                {CORE_SUBJECTS.map((card) => (
+                  <ImageCard key={card.label} {...card} onClick={() => openSubject(card)} />
+                ))}
+              </div>
+            </section>
+
+            <section aria-labelledby="recommended-courses-heading" className="mt-12">
+              <h2 id="recommended-courses-heading" className="mb-5 text-2xl font-extrabold text-teal-700 sm:text-3xl">
+                Recommended Courses for You
+              </h2>
+              <div className="grid gap-5 md:grid-cols-3">
+                {RECOMMENDED_COURSES.map((course) => (
+                  <ImageCard
+                    key={course.label}
+                    {...course}
+                    onClick={() => setNotice(`${course.label} is ready to be designed as a learning path next.`)}
+                  />
+                ))}
+              </div>
+            </section>
+
+            {notice && (
+              <div role="status" className="mt-8 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm font-medium text-teal-800">
+                {notice}
               </div>
             )}
           </div>
+        </main>
 
-          {/* Two-pane layout */}
-          <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
-            {/* Sticky picker */}
-            <div className="space-y-4 lg:sticky lg:top-4 self-start">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Subject</CardTitle>
-                  <CardDescription>Switch focus areas.</CardDescription>
-                </CardHeader>
-                <CardContent className="grid grid-cols-2 gap-2">
-                  {SUBJECTS.map((s) => (
-                    <Button
-                      key={s.id}
-                      variant={subject === s.id ? 'default' : 'outline'}
-                      size="sm"
-                      className="justify-start gap-2"
-                      onClick={() => setSubject(s.id)}
-                    >
-                      <span aria-hidden>{s.emoji}</span>
-                      <span className="truncate">{s.label}</span>
-                    </Button>
-                  ))}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Activities</CardTitle>
-                  <CardDescription>
-                    {activities.length === 0
-                      ? 'No activities for this subject yet.'
-                      : `${activities.length} available • ${completedIds.length} done`}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-2 max-h-[420px] overflow-y-auto">
-                  {activities.map((a) => {
-                    const isActive = selected?.id === a.id
-                    const isCompleted = completedIds.includes(a.id)
-                    const supportsCanvas =
-                      manipulativeToActivityType(a.manipulative) !== null
-                    return (
-                      <Button
-                        key={a.id}
-                        variant={isActive ? 'default' : 'outline'}
-                        className="w-full justify-start gap-2 h-auto py-2 text-left"
-                        onClick={() => setSelected(a)}
-                      >
-                        <span className="text-lg shrink-0" aria-hidden>
-                          {a.icon}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block font-medium truncate">
-                            {a.title}
-                            {isCompleted ? ' ✓' : ''}
-                          </span>
-                          <span className="block text-xs text-muted-foreground truncate">
-                            {supportsCanvas ? 'Canvas lesson' : 'Worksheet'}
-                            {' · '}
-                            {a.estimatedTime} min
-                          </span>
-                        </span>
-                      </Button>
-                    )
-                  })}
-                </CardContent>
-              </Card>
-
-              <Button
-                asChild
-                variant="ghost"
-                size="sm"
-                className="w-full justify-start"
-              >
-                <Link href={`/student/sandbox/${effectiveGrade}/${subject}`}>
-                  Browse all in classic view
-                  <ExternalLink className="h-3 w-3 ml-1" />
-                </Link>
-              </Button>
-            </div>
-
-            {/* Sandbox column */}
-            <div className="space-y-4">
-              {!studentGrade && (
-                <Card>
-                  <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                    Loading your activities…
-                  </CardContent>
-                </Card>
-              )}
-
-              {studentGrade && !selected && (
-                <Card>
-                  <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                    Pick an activity on the left to start.
-                  </CardContent>
-                </Card>
-              )}
-
-              {studentGrade && selected && canvasReady && selectedActivityType && selectedVariations && (
-                <InteractiveSandbox
-                  // Key by activity id so session state resets cleanly
-                  // between activities (matches the existing pattern).
-                  key={selected.id}
-                  activityType={selectedActivityType}
-                  competency={
-                    selected.competency ??
-                    `${selected.subject.toUpperCase()}.${selected.grade.toUpperCase()}.${selected.id}`
-                  }
-                  grade={selected.grade}
-                  subject={selected.subject}
-                  question={selectedVariations[0].question}
-                  correctAnswerValue={selectedVariations[0].correctAnswerValue}
-                  correctAnswerLabel={selectedVariations[0].correctAnswerLabel}
-                  variations={selectedVariations}
-                  masteryThreshold={
-                    selected.masteryThreshold ??
-                    Math.min(2, selectedVariations.length)
-                  }
-                  lessonId={selected.id}
-                  onComplete={handleComplete}
-                />
-              )}
-
-              {studentGrade && selected && !canvasReady && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">{selected.title}</CardTitle>
-                    <CardDescription>{selected.description}</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <p className="text-sm text-muted-foreground">
-                      This activity hasn't been wired into the canvas yet. Open
-                      the classic worksheet view to do it now.
-                    </p>
-                    <Button asChild>
-                      <Link
-                        href={`/student/sandbox/${selected.grade}/${selected.subject}/${selected.id}`}
-                      >
-                        Open in classic view
-                        <ExternalLink className="h-3 w-3 ml-1" />
-                      </Link>
-                    </Button>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          </div>
-        </div>
-      </main>
+        <FloatingConceptChat studentName="Student" grade="Grade 2" />
+      </div>
     </div>
   )
 }

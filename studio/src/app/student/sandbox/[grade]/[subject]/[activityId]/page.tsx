@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { StudentHeader } from '@/components/layout/student-header';
+import { FloatingConceptChat } from '@/components/student/floating-concept-chat';
 import { getActivityById } from '@/lib/sandbox-activities';
 import { submitActivity } from '@/lib/sandbox-submission';
 import type { Activity, Manipulative } from '@/lib/sandbox-types';
@@ -193,6 +194,18 @@ export default function ActivityPage() {
           />
         )}
       </div>
+      <FloatingConceptChat
+        studentName={
+          typeof user?.user_metadata?.full_name === 'string'
+            ? user.user_metadata.full_name
+            : 'Student'
+        }
+        grade={`Grade ${grade.replace(/^g/, '')}`}
+        subject={subject
+          .split('-')
+          .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ')}
+      />
     </div>
   );
 }
