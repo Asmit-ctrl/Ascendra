@@ -222,7 +222,7 @@ export function MwalimuChat({
     // Show toast for significant emotional changes
     if (newState.state === 'frustrated' || newState.state === 'confused') {
       toast({
-        title: 'Mwalimu is adapting',
+        title: 'mwalimu_ai is adapting',
         description: `Adjusting teaching approach for ${newState.state} state`,
         duration: 2000,
       });
@@ -483,7 +483,7 @@ export function MwalimuChat({
               </AvatarFallback>
             </Avatar>
             <div>
-              <CardTitle className="text-lg">Mwalimu AI Tutor</CardTitle>
+              <CardTitle className="text-lg">mwalimu_ai Tutor</CardTitle>
               <p className="text-sm text-muted-foreground">
                 {subject} • {grade}
               </p>
@@ -520,7 +520,7 @@ export function MwalimuChat({
                 <Brain className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <h3 className="font-semibold mb-2">Welcome, {studentName}!</h3>
                 <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                  I'm Mwalimu, your AI tutor. Ask me anything about {subject} and I'll help you learn!
+                  I'm mwalimu_ai, your AI tutor. Ask me anything about {subject} and I'll help you learn!
                 </p>
               </div>
             )}
@@ -675,7 +675,7 @@ export function MwalimuChat({
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask Mwalimu anything..."
+              placeholder="Ask mwalimu_ai anything..."
               className="min-h-[60px] max-h-[120px] resize-none"
               disabled={isLoading}
             />

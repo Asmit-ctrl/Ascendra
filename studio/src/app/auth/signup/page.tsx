@@ -6,16 +6,17 @@ import { SignUpForm } from '@/components/auth/sign-up-form';
 
 export default function SignUpPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
+    <main className="education-shell flex items-center justify-center bg-[radial-gradient(circle_at_top,_hsl(var(--secondary))_0,_transparent_34rem)] p-5">
       <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold mb-2">Mwalimu AI</h1>
+        <div className="mb-8 text-center">
+          <p className="education-kicker mb-3">Begin your learning path</p>
+          <h1 className="mb-2 font-headline text-4xl font-bold text-primary">mwalimu_ai</h1>
           <p className="text-muted-foreground">
             Your personal AI tutor for CBC curriculum
           </p>
         </div>
         <SignUpForm />
       </div>
-    </div>
+    </main>
   );
 }

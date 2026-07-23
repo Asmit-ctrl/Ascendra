@@ -42,6 +42,7 @@ import {
 import { getDemoBadges } from '@/lib/gamification/badges';
 import { getStudentId } from '@/lib/auth/student-id';
 import { CompetencyMap } from '@/components/student/competency-map';
+import { FloatingConceptChat } from '@/components/student/floating-concept-chat';
 
 interface StudentProfile {
   id: string;
@@ -97,6 +98,8 @@ const todaysClasses = [
   { subject: 'Mathematics', time: '2:00 PM — 3:00 PM' },
   { subject: 'English Literature', time: '3:30 PM — 4:30 PM' },
 ];
+
+const DASHBOARD_CARD_CLASS = 'border-teal-100 bg-white/90 text-slate-900 shadow-sm';
 
 export default function StudentDashboardPage() {
   const router = useRouter();
@@ -197,7 +200,7 @@ export default function StudentDashboardPage() {
   };
 
   const getPersonalizedMotivation = () => {
-    if (!profile) return "Ready to learn with Mwalimu AI today?";
+    if (!profile) return "Ready to learn with mwalimu_ai today?";
     
     const totalSessions = learningProgress.reduce((sum, p) => sum + p.totalSessions, 0);
     const maxStreak = Math.max(...learningProgress.map(p => p.streakDays), 0);
@@ -215,7 +218,7 @@ export default function StudentDashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col min-h-screen bg-background">
+      <div className="flex min-h-screen flex-col bg-[#fffaf0] text-slate-900">
         <StudentHeader showBackButton={false} onBack={() => router.back()} />
         <main className="flex-1 p-6 flex items-center justify-center">
           <div className="text-center">
@@ -228,8 +231,8 @@ export default function StudentDashboardPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
-      <StudentHeader showBackButton={false} onBack={() => router.back()} />
+    <div className="flex min-h-screen flex-col bg-[#fffaf0] text-slate-900">
+      <StudentHeader showBackButton={false} onBack={() => router.back()} variant="catalog" />
 
       <main className="flex-1 p-6">
         <div className="max-w-7xl mx-auto space-y-6">
@@ -243,16 +246,16 @@ export default function StudentDashboardPage() {
               </p>
               {profile && (
                 <div className="flex flex-wrap gap-2 mt-2">
-                  <Badge variant="secondary" className="gap-1">
+                  <Badge variant="secondary" className="gap-1 border-teal-100 bg-teal-50 text-teal-800">
                     <Heart className="h-3 w-3" />
                     {profile.learningStyle} learner
                   </Badge>
-                  <Badge variant="outline" className="gap-1">
+                  <Badge variant="outline" className="gap-1 border-teal-200 text-teal-800">
                     <Target className="h-3 w-3" />
                     {profile.grade}
                   </Badge>
                   {profile.interests.slice(0, 2).map((interest) => (
-                    <Badge key={interest} variant="outline" className="gap-1">
+                    <Badge key={interest} variant="outline" className="gap-1 border-teal-200 text-teal-800">
                       <Star className="h-3 w-3" />
                       {interest}
                     </Badge>
@@ -261,11 +264,11 @@ export default function StudentDashboardPage() {
               )}
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant="outline" className="gap-1">
+              <Badge variant="outline" className="gap-1 border-teal-200 text-teal-800">
                 <Brain className="h-3 w-3" />
-                Mwalimu Active
+                mwalimu_ai Active
               </Badge>
-              <Badge variant="outline" className="gap-1">
+              <Badge variant="outline" className="gap-1 border-teal-200 text-teal-800">
                 <Clock className="h-3 w-3" />
                 Personalized
               </Badge>
@@ -273,7 +276,7 @@ export default function StudentDashboardPage() {
           </div>
 
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Card>
+            <Card className={DASHBOARD_CARD_CLASS}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Learning Sessions</CardTitle>
                 <MessageCircle className="h-4 w-4 text-muted-foreground" />
@@ -288,7 +291,7 @@ export default function StudentDashboardPage() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className={DASHBOARD_CARD_CLASS}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Learning Streak</CardTitle>
                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
@@ -303,7 +306,7 @@ export default function StudentDashboardPage() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className={DASHBOARD_CARD_CLASS}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Overall Progress</CardTitle>
                 <Brain className="h-4 w-4 text-muted-foreground" />
@@ -316,7 +319,7 @@ export default function StudentDashboardPage() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className={DASHBOARD_CARD_CLASS}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Active Assignments</CardTitle>
                 <BookOpen className="h-4 w-4 text-muted-foreground" />
@@ -359,7 +362,7 @@ export default function StudentDashboardPage() {
           {/* Overview Tab */}
           {activeTab === 'overview' && (
             <div className="grid gap-6 lg:grid-cols-3">
-              <Card className="lg:col-span-2">
+              <Card className={`${DASHBOARD_CARD_CLASS} lg:col-span-2`}>
               <CardHeader>
                 <CardTitle>Personalized Learning Path</CardTitle>
                 <CardDescription>AI-adapted curriculum based on your progress and interests</CardDescription>
@@ -415,7 +418,7 @@ export default function StudentDashboardPage() {
             </Card>
 
             <div className="space-y-6">
-              <Card>
+              <Card className={DASHBOARD_CARD_CLASS}>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Brain className="h-5 w-5" />
@@ -443,11 +446,11 @@ export default function StudentDashboardPage() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className={DASHBOARD_CARD_CLASS}>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Zap className="h-5 w-5" />
-                    Mwalimu AI Tutor
+                    mwalimu_ai Tutor
                   </CardTitle>
                   <CardDescription>
                     {tutorTaglineFor(profile?.grade)}
@@ -472,14 +475,14 @@ export default function StudentDashboardPage() {
                 </CardContent>
               </Card>
 
-              <Card className="border-primary/40">
+              <Card className={`${DASHBOARD_CARD_CLASS} border-primary/40`}>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Sparkles className="h-5 w-5 text-primary" />
                     Practice Sandbox
                   </CardTitle>
                   <CardDescription>
-                    Drag, build, and explore. Mwalimu learns from how you think.
+                    Drag, build, and explore. mwalimu_ai learns from how you think.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -493,7 +496,7 @@ export default function StudentDashboardPage() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className={DASHBOARD_CARD_CLASS}>
                 <CardHeader>
                   <CardTitle>Today&apos;s Classes</CardTitle>
                 </CardHeader>
@@ -706,6 +709,11 @@ export default function StudentDashboardPage() {
           )}
         </div>
       </main>
+      <FloatingConceptChat
+        studentName={studentName}
+        grade={profile?.grade}
+        language={profile?.preferredLanguage ?? 'mixed'}
+      />
     </div>
   );
 }

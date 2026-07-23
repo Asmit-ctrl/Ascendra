@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { StudentHeader } from '@/components/layout/student-header';
+import { FloatingConceptChat } from '@/components/student/floating-concept-chat';
 import { getActivityById } from '@/lib/sandbox-activities';
 import { submitActivity } from '@/lib/sandbox-submission';
 import type { Activity, Manipulative } from '@/lib/sandbox-types';
@@ -160,10 +161,10 @@ export default function ActivityPage() {
   const canvasReady = sandboxActivityType !== null && sandboxVariations !== undefined;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-purple-50 dark:from-gray-900 dark:to-gray-800">
-      <StudentHeader showBackButton onBack={handleBack} />
+    <div className="education-shell">
+      <StudentHeader showBackButton onBack={handleBack} variant="catalog" />
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="mx-auto max-w-7xl px-5 py-6 sm:px-8 sm:py-8">
         {canvasReady && sandboxActivityType && sandboxVariations ? (
           <InteractiveSandbox
             key={activity.id}
@@ -193,6 +194,18 @@ export default function ActivityPage() {
           />
         )}
       </div>
+      <FloatingConceptChat
+        studentName={
+          typeof user?.user_metadata?.full_name === 'string'
+            ? user.user_metadata.full_name
+            : 'Student'
+        }
+        grade={`Grade ${grade.replace(/^g/, '')}`}
+        subject={subject
+          .split('-')
+          .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ')}
+      />
     </div>
   );
 }

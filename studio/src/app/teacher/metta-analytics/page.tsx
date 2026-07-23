@@ -8,14 +8,16 @@
 import { Phase2TeacherDashboard } from '@/components/teacher/phase2-teacher-dashboard';
 
 export const metadata = {
-  title: 'MeTTa Analytics - Mwalimu AI',
+  title: 'MeTTa Analytics - mwalimu_ai',
   description: 'Advanced behavioral analytics and misconception detection dashboard',
 };
 
 export default function MeTTaAnalyticsDashboardPage() {
   return (
-    <div className="container mx-auto py-8 px-4">
-      <Phase2TeacherDashboard />
-    </div>
+    <main className="education-shell">
+      <div className="mx-auto max-w-7xl px-5 py-8 sm:px-8">
+        <Phase2TeacherDashboard />
+      </div>
+    </main>
   );
 }

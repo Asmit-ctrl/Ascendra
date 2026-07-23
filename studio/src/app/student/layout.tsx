@@ -3,7 +3,7 @@ import Link from 'next/link';
 
 export default function StudentLayout({ children }: { children: ReactNode }) {
   return (
-      <div className="bg-muted/40 dark:bg-background flex flex-col min-h-screen">
+      <div className="flex min-h-screen flex-col bg-background">
           <main className="flex-grow">
               {children}
           </main>

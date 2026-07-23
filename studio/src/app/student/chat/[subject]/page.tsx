@@ -78,13 +78,13 @@ export default function StudentChatPage({ params }: PageProps) {
   }, [searchParams]);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <StudentHeader showBackButton onBack={() => router.push('/student/journey')} />
+    <div className="education-shell flex flex-col">
+      <StudentHeader showBackButton onBack={() => router.push('/student/journey')} variant="catalog" />
 
       <main className="flex-1 container mx-auto px-4 py-6 max-w-6xl flex flex-col gap-4">
         <div className="flex items-center justify-between gap-4 flex-col md:flex-row">
           <div>
-            <h1 className="text-2xl font-bold">Mwalimu AI · {subject}</h1>
+            <h1 className="text-2xl font-bold">mwalimu_ai · {subject}</h1>
             <p className="text-sm text-muted-foreground">
               {grade} · {tutorLabelFor(grade)}
             </p>

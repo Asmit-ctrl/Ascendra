@@ -336,7 +336,7 @@ function getAchievementDetails(
   const achievements: Record<string, { name: string; description: string; icon: string }> = {
     first_session: {
       name: 'First Steps',
-      description: 'Started your first learning session with Mwalimu',
+      description: 'Started your first learning session with mwalimu_ai',
       icon: '🎯',
     },
     streak_7: {

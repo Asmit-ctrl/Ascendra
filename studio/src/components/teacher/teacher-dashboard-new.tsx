@@ -160,7 +160,8 @@ export function TeacherDashboardNew() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Teacher Dashboard</h1>
+          <p className="education-kicker mb-2">Educator workspace</p>
+          <h1 className="font-headline text-3xl font-bold">Teacher Dashboard</h1>
           <p className="text-muted-foreground">
             Monitor your students in real-time
           </p>
