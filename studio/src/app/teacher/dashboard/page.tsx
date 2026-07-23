@@ -7,14 +7,16 @@
 import { TeacherDashboardNew } from '@/components/teacher/teacher-dashboard-new';
 
 export const metadata = {
-  title: 'Teacher Dashboard - Mwalimu AI',
+  title: 'Teacher Dashboard - mwalimu_ai',
   description: 'Monitor your students in real-time and provide timely interventions',
 };
 
 export default function TeacherDashboardPage() {
   return (
-    <div className="container mx-auto py-8 px-4">
-      <TeacherDashboardNew />
-    </div>
+    <main className="education-shell">
+      <div className="mx-auto max-w-7xl px-5 py-8 sm:px-8">
+        <TeacherDashboardNew />
+      </div>
+    </main>
   );
 }

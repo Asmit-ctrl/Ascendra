@@ -117,11 +117,11 @@ export function SignUpForm() {
   };
 
   return (
-    <Card className="w-full max-w-md mx-auto">
+    <Card className="mx-auto w-full max-w-md border-border/80 shadow-[0_18px_45px_hsl(174_30%_16%/0.1)]">
       <CardHeader>
         <CardTitle>Create Account</CardTitle>
         <CardDescription>
-          Join Mwalimu AI to start your learning journey
+          Join mwalimu_ai to start your learning journey
         </CardDescription>
       </CardHeader>
 

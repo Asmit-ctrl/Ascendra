@@ -8,8 +8,8 @@ documents at the repository root.
 ## Project identity
 
 The Git repository is named **Ascendra**, while most product-facing source
-code calls the platform **SyncSenta** and the tutoring experience **Mwalimu
-AI**. Those names refer to the same broad education-platform effort, but the
+code calls the platform **SyncSenta** and the tutoring experience **mwalimu_ai**.
+Those names refer to the same broad education-platform effort, but the
 repository contains more than one application and more than one generation of
 the architecture.
 
@@ -17,7 +17,7 @@ the architecture.
 
 ![Ascendra / SyncSenta use-case overview](images/use-case-overview.png)
 
-The platform centers Mwalimu AI around learners, teachers, school leaders,
+The platform centers mwalimu_ai around learners, teachers, school leaders,
 county teams, and an ESP32-based classroom-device prototype.
 
 | Area | What it is | Main entry point |

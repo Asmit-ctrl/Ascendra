@@ -91,10 +91,10 @@ export default function SandboxPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-purple-50 dark:from-gray-900 dark:to-gray-800">
-      <StudentHeader showBackButton onBack={handleBack} />
+    <div className="education-shell">
+      <StudentHeader showBackButton onBack={handleBack} variant="catalog" />
       
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
+      <div className="mx-auto max-w-7xl px-5 py-6 sm:px-8 sm:py-8">
         {/* Date Warning Alert */}
         {dateWarning && (
           <Alert variant="destructive" className="mb-6">
@@ -105,12 +105,12 @@ export default function SandboxPage() {
         )}
 
         {/* Term Information Alert */}
-        <Alert className="mb-6 bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
-          <Calendar className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-          <AlertTitle className="text-blue-900 dark:text-blue-100">
+        <Alert className="mb-6 border-teal-200 bg-[#eaf6f3]">
+          <Calendar className="h-4 w-4 text-teal-700" />
+          <AlertTitle className="text-teal-950">
             Current Term: {getTermName(currentTerm as 1 | 2 | 3)}
           </AlertTitle>
-          <AlertDescription className="text-blue-800 dark:text-blue-200">
+          <AlertDescription className="text-teal-800">
             {formatTermInfo(currentTerm as 1 | 2 | 3)} • You're seeing content available up to this term
           </AlertDescription>
         </Alert>
@@ -119,28 +119,29 @@ export default function SandboxPage() {
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
+              <p className="education-kicker mb-2">Practice studio</p>
+              <h1 className="mb-2 font-headline text-3xl font-bold text-foreground sm:text-4xl">
                 {getSubjectName(subject)} Sandbox
               </h1>
-              <p className="text-lg text-gray-600 dark:text-gray-300">
+              <p className="text-base text-muted-foreground sm:text-lg">
                 {getGradeName(grade)} • Interactive Learning Activities
               </p>
             </div>
             <div className="flex gap-4">
-              <Card className="p-4">
+              <Card className="border-amber-200 bg-[#fffaf0] p-4 shadow-none">
                 <div className="flex items-center gap-2">
                   <Trophy className="w-6 h-6 text-yellow-500" />
                   <div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Points</p>
+                    <p className="text-sm text-muted-foreground">Points</p>
                     <p className="text-2xl font-bold">{totalPoints}</p>
                   </div>
                 </div>
               </Card>
-              <Card className="p-4">
+              <Card className="border-amber-200 bg-[#fffaf0] p-4 shadow-none">
                 <div className="flex items-center gap-2">
                   <Star className="w-6 h-6 text-orange-500" />
                   <div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Streak</p>
+                    <p className="text-sm text-muted-foreground">Streak</p>
                     <p className="text-2xl font-bold">{currentStreak} days</p>
                   </div>
                 </div>
@@ -149,10 +150,10 @@ export default function SandboxPage() {
           </div>
 
           {/* Progress Bar */}
-          <Card className="p-6">
+          <Card className="border-teal-100 bg-card/90 p-6">
             <div className="flex items-center justify-between mb-2">
               <p className="text-sm font-medium">Overall Progress</p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
+              <p className="text-sm text-muted-foreground">
                 {completedActivityIds.length} of {activities.length} activities completed
               </p>
             </div>
@@ -164,7 +165,7 @@ export default function SandboxPage() {
         {recommendedActivities.length > 0 && (
           <div className="mb-8">
             <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-              <Target className="w-6 h-6 text-blue-500" />
+              <Target className="h-6 w-6 text-accent" />
               Recommended for You
             </h2>
             <div className="grid md:grid-cols-3 gap-4">
@@ -173,11 +174,11 @@ export default function SandboxPage() {
                   key={activity.id} 
                   href={`/student/sandbox/${grade}/${subject}/${activity.id}`}
                 >
-                  <Card className="h-full hover:shadow-lg transition-shadow cursor-pointer border-2 border-blue-500">
+                  <Card className="h-full border-primary/50 transition-all duration-200 hover:-translate-y-1 hover:border-primary hover:shadow-[0_16px_32px_hsl(174_30%_16%/0.12)]">
                     <CardHeader>
                       <div className="flex items-start justify-between">
                         <div className="text-4xl mb-2">{activity.icon}</div>
-                        <Badge variant="secondary" className="bg-blue-100 text-blue-700">
+                        <Badge variant="secondary" className="bg-secondary text-secondary-foreground">
                           Recommended
                         </Badge>
                       </div>
@@ -185,7 +186,7 @@ export default function SandboxPage() {
                       <CardDescription>{activity.description}</CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
                         <div className="flex items-center gap-1">
                           <Clock className="w-4 h-4" />
                           {activity.estimatedTime} min
@@ -232,8 +233,8 @@ export default function SandboxPage() {
                       <Card className={cn(
                         "h-full transition-all",
                         isLocked && "opacity-50 cursor-not-allowed",
-                        !isLocked && "hover:shadow-lg hover:border-primary cursor-pointer",
-                        isCompleted && "border-2 border-green-500"
+                        !isLocked && "cursor-pointer hover:-translate-y-1 hover:border-primary hover:shadow-[0_16px_32px_hsl(174_30%_16%/0.12)]",
+                        isCompleted && "border-2 border-emerald-500"
                       )}>
                         <CardHeader>
                           <div className="flex items-start justify-between">
@@ -257,7 +258,7 @@ export default function SandboxPage() {
                         </CardHeader>
                         <CardContent>
                           <div className="flex items-center justify-between text-sm">
-                            <div className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
+                            <div className="flex items-center gap-1 text-muted-foreground">
                               <Clock className="w-4 h-4" />
                               {activity.estimatedTime} min
                             </div>
@@ -286,7 +287,7 @@ export default function SandboxPage() {
           <Card className="p-12 text-center">
             <div className="text-6xl mb-4">🚧</div>
             <h3 className="text-2xl font-bold mb-2">Coming Soon!</h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
+            <p className="mb-4 text-muted-foreground">
               We're building amazing activities for {getSubjectName(subject)} in {getGradeName(grade)}.
             </p>
             <Button onClick={handleBack}>

@@ -161,10 +161,10 @@ export default function ActivityPage() {
   const canvasReady = sandboxActivityType !== null && sandboxVariations !== undefined;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-purple-50 dark:from-gray-900 dark:to-gray-800">
-      <StudentHeader showBackButton onBack={handleBack} />
+    <div className="education-shell">
+      <StudentHeader showBackButton onBack={handleBack} variant="catalog" />
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="mx-auto max-w-7xl px-5 py-6 sm:px-8 sm:py-8">
         {canvasReady && sandboxActivityType && sandboxVariations ? (
           <InteractiveSandbox
             key={activity.id}

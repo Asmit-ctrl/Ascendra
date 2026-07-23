@@ -14,7 +14,7 @@ paths** in Studio:
 1. The Socratic student chat calls Studio's own POST /api/chat route. That
    route authenticates, rate-limits when Upstash is configured, calls Groq
    directly, persists progress, and streams Server-Sent Events to the browser.
-2. MwalimuChat, teacher generators, telemetry, and dashboard tooling call the
+2. mwalimu_ai chat, teacher generators, telemetry, and dashboard tooling call the
    FastAPI service at NEXT_PUBLIC_AI_AGENTS_URL, normally on port 8001 in
    development.
 
@@ -218,7 +218,7 @@ credentials disable rate limiting rather than blocking chat.
 
 ~~~mermaid
 sequenceDiagram
-  participant B as MwalimuChat or teacher UI
+  participant B as mwalimu_ai chat or teacher UI
   participant A as FastAPI /agents/chat
   participant S as Supabase
   participant O as SyncSentaOrchestrator
@@ -232,7 +232,7 @@ sequenceDiagram
   A-->>B: JSON response
 ~~~
 
-MwalimuChat reads NEXT_PUBLIC_AI_AGENTS_URL but also has a hard-coded Render
+mwalimu_ai chat reads NEXT_PUBLIC_AI_AGENTS_URL but also has a hard-coded Render
 fallback. Teacher components use the shared API configuration helper. This is
 a JSON API, not the same SSE transport as SocraticChat.
 

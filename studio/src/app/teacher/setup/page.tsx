@@ -17,7 +17,7 @@ import { GraduationCap, Mail } from 'lucide-react';
 
 export default function TeacherSetupPage() {
   return (
-    <div className="container mx-auto py-12">
+    <main className="education-shell px-5 py-12 sm:px-8">
       <Card className="max-w-2xl mx-auto">
         <CardHeader className="text-center">
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
@@ -29,7 +29,7 @@ export default function TeacherSetupPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="rounded-md border bg-muted/40 p-4 text-sm text-muted-foreground space-y-2">
+          <div className="space-y-2 rounded-xl border border-border/80 bg-secondary/45 p-4 text-sm text-muted-foreground">
             <p>
               The self-service setup wizard is on the roadmap. In the meantime,
               ask your school administrator to add you to:
@@ -55,7 +55,7 @@ export default function TeacherSetupPage() {
           </div>
         </CardContent>
       </Card>
-    </div>
+    </main>
   );
 }
 

@@ -53,7 +53,7 @@ export function SignInForm() {
   };
 
   return (
-    <Card className="w-full max-w-md mx-auto">
+    <Card className="mx-auto w-full max-w-md border-border/80 shadow-[0_18px_45px_hsl(174_30%_16%/0.1)]">
       <CardHeader>
         <CardTitle>Welcome Back</CardTitle>
         <CardDescription>

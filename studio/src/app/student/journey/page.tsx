@@ -163,8 +163,8 @@ export default function JourneyPage() {
   const currentLevel = level ? LEVELS_BY_ID[level] : null;
 
   return (
-    <div className="min-h-screen bg-background">
-      <StudentHeader showBackButton onBack={() => router.back()} />
+    <div className="education-shell">
+      <StudentHeader showBackButton onBack={() => router.back()} variant="catalog" />
 
       <main className="container mx-auto px-4 py-8 max-w-4xl">
         <div className="mb-8 text-center space-y-2">
@@ -181,7 +181,7 @@ export default function JourneyPage() {
           </h1>
           <p className="text-muted-foreground max-w-xl mx-auto">
             {step === 'level' &&
-              'Tell Mwalimu AI your school level so the conversation matches your CBC syllabus.'}
+              'Tell mwalimu_ai your school level so the conversation matches your CBC syllabus.'}
             {step === 'grade' && currentLevel &&
               `${currentLevel.label} — ${currentLevel.description}`}
             {step === 'subject' && grade &&
@@ -341,10 +341,10 @@ export default function JourneyPage() {
 
             {/* Sandbox Link */}
             <div className="mt-6">
-              <Card className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 border-2 border-dashed border-purple-300 dark:border-purple-700">
+              <Card className="border-2 border-dashed border-teal-300 bg-[#f1faf7]">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-lg">
-                    <Gamepad2 className="h-6 w-6 text-purple-600" />
+                    <Gamepad2 className="h-6 w-6 text-primary" />
                     Interactive Learning Sandbox
                   </CardTitle>
                   <CardDescription>
@@ -364,7 +364,7 @@ export default function JourneyPage() {
                         }
                       }
                     }}
-                    className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+                    className="w-full"
                   >
                     <Gamepad2 className="h-4 w-4 mr-2" />
                     Enter Sandbox

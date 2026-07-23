@@ -1,4 +1,4 @@
-# Mwalimu AI Chat Component
+# mwalimu_ai Chat Component
 
 Production-level student chatbot interface for SyncSenta Education OS.
 
