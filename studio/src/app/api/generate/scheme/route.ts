@@ -6,6 +6,7 @@ import { getSupabaseServerClient } from '@/lib/supabase/server';
 // open that localhost connection during development, so keep this proxy in the
 // Node.js runtime (which also works for normal server deployments).
 export const runtime = 'nodejs';
+const DEFAULT_AI_TIMEOUT_MS = 8_000;
 
 type SchemeRequest = {
   grade?: string;
@@ -70,6 +71,15 @@ function prescribedScheme(payload: SchemeRequest, reason: string) {
 
 export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as SchemeRequest;
+
+  // Presentation deployments can opt out of the network call entirely. This
+  // is useful when only the prescribed CBC demonstration data is required.
+  if (process.env.SCHEME_GENERATION_MODE?.toLowerCase() === 'prescribed') {
+    return NextResponse.json(
+      prescribedScheme(body, 'Presentation mode is using the prescribed CBC scheme.'),
+    );
+  }
+
   let target: string;
   try {
     target = buildApiUrl('/lesson-architect/generate-scheme');
@@ -86,12 +96,17 @@ export async function POST(req: NextRequest) {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (user?.id) headers['X-Forwarded-User'] = user.id;
 
+  const configuredTimeout = Number(process.env.SCHEME_AI_TIMEOUT_MS);
+  const timeoutMs = Number.isFinite(configuredTimeout) && configuredTimeout > 0
+    ? configuredTimeout
+    : DEFAULT_AI_TIMEOUT_MS;
+
   try {
     const res = await fetch(target, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(60_000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
 
     if (!res.ok) {
