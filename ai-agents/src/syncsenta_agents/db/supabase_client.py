@@ -30,7 +30,7 @@ def get_supabase_client() -> Optional[Client]:
         logger.warning(
             "SUPABASE_URL environment variable not set. "
             "Database features will be disabled. "
-            "Get it from: https://app.supabase.com → Project Settings → API"
+            "Get it from: https://app.supabase.com -> Project Settings -> API"
         )
         return None
     
@@ -38,7 +38,7 @@ def get_supabase_client() -> Optional[Client]:
         logger.warning(
             "SUPABASE_SERVICE_KEY environment variable not set. "
             "Database features will be disabled. "
-            "Get it from: https://app.supabase.com → Project Settings → API → service_role key"
+            "Get it from: https://app.supabase.com -> Project Settings -> API -> service_role key"
         )
         return None
     

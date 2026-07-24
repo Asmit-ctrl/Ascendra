@@ -7,6 +7,10 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { GradeLevel, Term, IndigenousLanguage } from '@/types/curriculum';
 
+// This is intentionally opt-in and is only enabled in the local `.env.local`
+// used for demonstrations. It is off in every production build by default.
+const isLocalDemoBypass = process.env.NEXT_PUBLIC_SCHEME_WIZARD_DEMO_BYPASS === 'true';
+
 /**
  * Wizard steps
  */
@@ -36,6 +40,7 @@ export interface TeacherInputs {
   learningExperiences?: string;
   learningResources?: string;
   assessmentMethods?: string;
+  sourceMaterial?: string;
 }
 
 /**
@@ -98,12 +103,18 @@ export interface SchemeWizardState {
 }
 
 const initialState = {
-  currentStep: 'grade' as WizardStep,
-  selectedGrade: null,
-  selectedSubject: null,
+  currentStep: (isLocalDemoBypass ? 'inputs' : 'grade') as WizardStep,
+  selectedGrade: (isLocalDemoBypass ? 'Grade 4' : null) as GradeLevel | null,
+  selectedSubject: isLocalDemoBypass ? 'CRE' : null,
   selectedIndigenousLanguage: null,
-  selectedTerm: null,
-  selectedStrands: [],
+  selectedTerm: (isLocalDemoBypass ? 'Term1' : null) as Term | null,
+  selectedStrands: isLocalDemoBypass
+    ? [{
+        strand: '1.0 Creation',
+        subStrands: ['1.1 Self-awareness'],
+        weeks: 1,
+      }]
+    : [],
   useWeeklyMode: false,
   teacherInputs: {},
   generatedScheme: null,
@@ -146,7 +157,20 @@ export const useSchemeWizardStore = create<SchemeWizardState>()(
       },
       
       // Data setters
-      setGrade: (grade) => set({ selectedGrade: grade }),
+      setGrade: (grade) => set({
+        // A grade change invalidates every curriculum-dependent choice made
+        // later in the wizard. Clearing these fields prevents stale subjects
+        // or strands from a previously persisted draft being reused.
+        selectedGrade: grade,
+        selectedSubject: null,
+        selectedIndigenousLanguage: null,
+        selectedTerm: null,
+        selectedStrands: [],
+        useWeeklyMode: false,
+        generatedScheme: null,
+        generationError: null,
+        savedSchemeId: null,
+      }),
       
       setSubject: (subject, indigenousLanguage) => set({ 
         selectedSubject: subject,
@@ -179,6 +203,12 @@ export const useSchemeWizardStore = create<SchemeWizardState>()(
     }),
     {
       name: 'scheme-wizard-storage',
+      // Do not rehydrate stale browser data while the local demo bypass is on.
+      // Removing the local environment flag restores normal persisted drafts.
+      merge: (persistedState, currentState) =>
+        isLocalDemoBypass
+          ? currentState
+          : { ...currentState, ...(persistedState as Partial<SchemeWizardState>) },
       partialize: (state) => ({
         // Only persist essential data, not UI state
         selectedGrade: state.selectedGrade,

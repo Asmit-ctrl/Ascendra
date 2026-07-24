@@ -94,15 +94,16 @@ export function getTermAllocation(
   subject: string,
   term: string
 ): { strandName: string; subStrands: SubStrandInfo[] }[] | null {
+  const normalizedTerm = term.replace(/^Term([1-3])$/, 'Term $1');
   // Lower Primary Kiswahili: Mada-based allocation
   if (isLowerPrimaryKiswahili(grade, subject)) {
-    return getKiswahiliLPTermAllocation(grade, term);
+    return getKiswahiliLPTermAllocation(grade, normalizedTerm);
   }
 
   const allStrands = getHardcodedStrands(grade, subject);
   if (!allStrands || allStrands.length === 0) return null;
 
-  const termIndex = ["Term 1", "Term 2", "Term 3"].indexOf(term);
+  const termIndex = ["Term 1", "Term 2", "Term 3"].indexOf(normalizedTerm);
   if (termIndex === -1) return null;
 
   if (subject === MATH_SUBJECT) {
@@ -111,7 +112,7 @@ export function getTermAllocation(
 
   const rules = STRAND_TERM_RULES[subject];
   if (rules) {
-    return getExplicitTermAllocation(allStrands, rules, term);
+    return getExplicitTermAllocation(allStrands, rules, normalizedTerm);
   }
 
   return getSequentialTermAllocation(allStrands, grade, subject, termIndex);

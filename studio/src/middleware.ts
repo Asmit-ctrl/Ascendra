@@ -14,12 +14,13 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
 
 const API_VERSION = '1.0.0';
 const SUPPORTED_VERSIONS = ['1.0.0'];
 
-export function middleware(request: NextRequest) {
-  const response = NextResponse.next();
+export async function middleware(request: NextRequest) {
+  let response = NextResponse.next({ request });
 
   // SECURITY: API Versioning
   response.headers.set('X-API-Version', API_VERSION);
@@ -43,6 +44,36 @@ export function middleware(request: NextRequest) {
         },
       }
     );
+  }
+
+  // Protect learner and teacher workspaces in production. Local demos can
+  // explicitly opt out through an ignored `.env.local`; this flag is never a
+  // production default.
+  const protectedRoute = request.nextUrl.pathname.startsWith('/teacher') || request.nextUrl.pathname.startsWith('/student');
+  const demoBypass = process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_AUTH_DEMO_BYPASS === 'true';
+  const authWallEnabled = process.env.AUTH_WALL_ENABLED !== 'false' && process.env.NODE_ENV === 'production';
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (protectedRoute && authWallEnabled && !demoBypass) {
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return NextResponse.redirect(new URL('/login?error=auth_not_configured', request.url));
+    }
+
+    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+      cookies: {
+        getAll() { return request.cookies.getAll(); },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+        },
+      },
+    });
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      const loginUrl = new URL('/login', request.url);
+      loginUrl.searchParams.set('next', request.nextUrl.pathname + request.nextUrl.search);
+      return NextResponse.redirect(loginUrl);
+    }
   }
 
   // Content Security Policy
