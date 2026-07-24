@@ -4,6 +4,12 @@
  * /student/chat/[subject]
  *
  * Thin client wrapper that decodes the subject + grade and renders
+'use client';
+
+/**
+ * /student/chat/[subject]
+ *
+ * Thin client wrapper that decodes the subject + grade and renders
  * <SocraticChat />. Grade is read from the ?grade= query param first, then
  * from sessionStorage (set by /student/journey), then a sensible default.
  *
@@ -11,7 +17,7 @@
  * component which POSTs to /api/chat.
  */
 
-import { useEffect, useState, use } from 'react';
+import { useEffect, useState, use, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { StudentHeader } from '@/components/layout/student-header';
 import { SocraticChat } from '@/components/student/socratic-chat';
@@ -30,7 +36,7 @@ interface PageProps {
   params: Promise<{ subject: string }>;
 }
 
-export default function StudentChatPage({ params }: PageProps) {
+function StudentChatContent({ params }: PageProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { subject: subjectParam } = use(params);
@@ -151,5 +157,13 @@ export default function StudentChatPage({ params }: PageProps) {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function StudentChatPage(props: PageProps) {
+  return (
+    <Suspense fallback={<div className="education-shell flex flex-col min-h-screen bg-background" />}>
+      <StudentChatContent {...props} />
+    </Suspense>
   );
 }
