@@ -97,8 +97,8 @@ export function PreviewStep() {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to generate scheme');
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.message || error.detail || error.error || 'Failed to generate scheme');
       }
 
       const data = await response.json();
