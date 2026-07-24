@@ -77,16 +77,18 @@ export function PreviewStep() {
 
     try {
       // Prepare request payload
+      const teacherId = getLocalTeacherId();
       const payload = {
+        teacher_id: teacherId,
         grade: selectedGrade,
         subject: selectedSubject,
-        term: selectedTerm,
+        term: selectedTerm?.replace(/^Term([1-3])$/, 'Term $1'),
         strands: selectedStrands,
         teacherInputs,
       };
 
       // Call backend API for scheme generation
-      const response = await fetch('/api/v1/schemes/generate', {
+      const response = await fetch('/api/generate/scheme', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -100,7 +102,11 @@ export function PreviewStep() {
       }
 
       const data = await response.json();
-      setGeneratedScheme(data.scheme);
+      setGeneratedScheme({
+        id: data.scheme_id,
+        title: data.title,
+        rows: data.rows || [],
+      });
     } catch (error) {
       console.error('[PreviewStep] Generation error:', error);
       setGenerationError(
@@ -187,7 +193,7 @@ export function PreviewStep() {
         </div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Sparkles className="h-4 w-4" />
-          <span>Powered by GPT-4o</span>
+          <span>Powered by Mwalimu AI</span>
         </div>
       </div>
     );
@@ -371,4 +377,15 @@ export function PreviewStep() {
       </Card>
     </div>
   );
+}
+
+function getLocalTeacherId(): string {
+  if (typeof window === 'undefined') return 'teacher_local';
+  const key = 'syncsenta:teacherId';
+  let teacherId = window.localStorage.getItem(key);
+  if (!teacherId) {
+    teacherId = `teacher_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
+    window.localStorage.setItem(key, teacherId);
+  }
+  return teacherId;
 }

@@ -1,8 +1,9 @@
 """Lesson Architect API endpoints for scheme and lesson plan management."""
 
+import os
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 from ..db.supabase_client import get_supabase_client
 from ..core.logging import get_logger
@@ -10,6 +11,54 @@ from ..agents.lesson_architect import LessonArchitectAgent, SchemeMode
 
 router = APIRouter(prefix="/lesson-architect", tags=["lesson-architect"])
 logger = get_logger("lesson_architect_api")
+
+
+def _has_llm_credentials() -> bool:
+    """Return whether any supported cloud provider is configured."""
+    return bool(
+        os.getenv("NVIDIA_API_KEY")
+        or os.getenv("OPENAI_API_KEY")
+        or os.getenv("GROQ_API_KEY")
+    )
+
+
+def _default_scheme_rows(request: "GenerateSchemeRequest") -> List[Dict[str, Any]]:
+    """Deterministic presentation fallback when no LLM key is configured."""
+    selections = request.selected_strands or [{
+        "strand": f"{request.subject} foundations",
+        "subStrands": ["Core concepts"],
+    }]
+    rows: List[Dict[str, Any]] = []
+    lesson = 1
+    for selection in selections:
+        strand = str(selection.get("strand") or f"{request.subject} foundations")
+        sub_strands = selection.get("subStrands") or ["Core concepts"]
+        for sub_strand in sub_strands:
+            rows.append({
+                "week": 1,
+                "lesson": lesson,
+                "strand": strand,
+                "subStrand": str(sub_strand),
+                "specificLearningOutcome": (
+                    "By the end of the lesson, the learner should be able to:\n"
+                    f"a) identify key ideas in {sub_strand};\n"
+                    f"b) demonstrate a guided {request.subject} activity;\n"
+                    "c) appreciate collaborative learning."
+                ),
+                "learningExperiences": (
+                    "Learner is guided to:\n"
+                    "a) recall prior knowledge;\n"
+                    "b) explore a teacher-modelled example;\n"
+                    "c) practise with a partner;\n"
+                    "d) share one reflection."
+                ),
+                "keyInquiryQuestion": f"How can we apply {sub_strand} in everyday life?",
+                "learningResources": "Teacher guide, learner book, locally available materials",
+                "assessmentMethods": "Observation, oral questions, short exit task",
+                "reflection": "",
+            })
+            lesson += 1
+    return rows
 
 
 class GenerateSchemeRequest(BaseModel):
@@ -20,6 +69,18 @@ class GenerateSchemeRequest(BaseModel):
     term: str
     mode: str = "standard"
     language: str = "english"
+    selected_strands: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("selected_strands", "strands"),
+    )
+    teacher_inputs: Dict[str, str] = Field(
+        default_factory=dict,
+        validation_alias=AliasChoices("teacher_inputs", "teacherInputs"),
+    )
+    indigenous_language: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("indigenous_language", "indigenousLanguage"),
+    )
 
 
 class SchemeRequest(BaseModel):
@@ -166,6 +227,19 @@ async def generate_scheme(request: GenerateSchemeRequest) -> Dict[str, Any]:
     SchemeRow JSON with KSA-validated learning outcomes.
     """
 
+    if not _has_llm_credentials():
+        rows = _default_scheme_rows(request)
+        return {
+            "success": True,
+            "scheme_id": "default_cbc_scheme",
+            "title": f"{request.grade} {request.subject} - {request.term} (Prescribed CBC)",
+            "grade": request.grade, "subject": request.subject, "term": request.term,
+            "mode": request.mode, "language": request.language,
+            "total_weeks": 1, "lessons_per_week": len(rows), "rows": rows,
+            "personalization_applied": bool(request.teacher_inputs),
+            "source": "prescribed-cbc-fallback",
+        }
+
     try:
         try:
             mode_enum = SchemeMode(request.mode)
@@ -180,6 +254,9 @@ async def generate_scheme(request: GenerateSchemeRequest) -> Dict[str, Any]:
             mode=mode_enum,
             teacher_id=request.teacher_id,
             language=request.language,
+            selected_strands=request.selected_strands,
+            teacher_inputs=request.teacher_inputs,
+            indigenous_language=request.indigenous_language,
         )
 
         scheme = result.get("scheme", {}) or {}
@@ -197,6 +274,7 @@ async def generate_scheme(request: GenerateSchemeRequest) -> Dict[str, Any]:
             "total_weeks": scheme.get("total_weeks", len(rows)),
             "lessons_per_week": scheme.get("lessons_per_week", 5),
             "rows": rows,
+            "personalization_applied": bool(request.teacher_inputs),
             "source": "ai-agents",
         }
 

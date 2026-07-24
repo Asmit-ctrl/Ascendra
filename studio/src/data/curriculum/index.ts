@@ -69,6 +69,16 @@ import { grade6Kiswahili } from "./upper-primary/kiswahili-grade6";
 
 type CurriculumKey = string;
 
+/**
+ * The wizard state uses compact values (for example `Grade4`), while the
+ * curriculum registry is keyed with display values (for example `Grade 4`).
+ * Accept either form at this boundary so persisted wizard drafts remain
+ * compatible with the curriculum data.
+ */
+function normalizeGrade(grade: string): string {
+  return grade.replace(/^Grade(\d+)$/, 'Grade $1');
+}
+
 const hardcodedStrands: Record<CurriculumKey, StrandInfo[]> = {
   "Grade 1|Creative Activities": grade1CreativeActivities,
   "Grade 2|Creative Activities": grade2CreativeActivities,
@@ -119,7 +129,7 @@ const hardcodedStrands: Record<CurriculumKey, StrandInfo[]> = {
  * Returns null if not yet hardcoded (will fall back to AI).
  */
 export function getHardcodedStrands(grade: string, subject: string): StrandInfo[] | null {
-  return hardcodedStrands[`${grade}|${subject}`] || null;
+  return hardcodedStrands[`${normalizeGrade(grade)}|${subject}`] || null;
 }
 
 /**
@@ -190,7 +200,7 @@ const juniorSecondaryLessons: Record<string, number> = {
 };
 
 export function getLessonsPerWeek(grade: string, subject: string): number {
-  const num = parseInt(grade.replace("Grade ", ""));
+  const num = parseInt(normalizeGrade(grade).replace("Grade ", ""));
   let map: Record<string, number>;
   if (num >= 1 && num <= 3) map = lowerPrimaryLessons;
   else if (num >= 4 && num <= 6) map = upperPrimaryLessons;
@@ -253,7 +263,7 @@ const juniorSecondarySubjects = [
 ];
 
 export function getSubjectsForGrade(grade: string): string[] {
-  const num = parseInt(grade.replace("Grade ", ""));
+  const num = parseInt(normalizeGrade(grade).replace("Grade ", ""));
   if (num >= 1 && num <= 3) return lowerPrimarySubjects;
   if (num >= 4 && num <= 6) return upperPrimarySubjects;
   if (num >= 7 && num <= 9) return juniorSecondarySubjects;

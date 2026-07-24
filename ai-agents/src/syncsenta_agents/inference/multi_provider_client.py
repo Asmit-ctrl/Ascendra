@@ -1,23 +1,34 @@
-"""Multi-Provider LLM Client with Automatic Fallback.
+"""Multi-provider LLM client with automatic fallback.
 
-Primary provider:
-1. Groq (fast, free, rate-limited but sufficient for our needs)
-
-Automatically handles rate limits with retry logic.
+NVIDIA NIM is the prototype default. OpenAI can be enabled later through
+environment variables without code changes; Groq remains an optional fallback.
 """
 
 import os
 import asyncio
 import logging
+from pathlib import Path
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
 from enum import Enum
 
+import httpx
+from dotenv import load_dotenv
+
 log = logging.getLogger(__name__)
+
+
+# Local credentials are intentionally kept outside version control. Loading is
+# non-destructive: exported deployment variables always take precedence.
+_AGENTS_ROOT = Path(__file__).resolve().parents[3]
+load_dotenv(_AGENTS_ROOT / ".env.local", override=False)
+load_dotenv(_AGENTS_ROOT / ".env", override=False)
 
 
 class ProviderType(str, Enum):
     """Available LLM providers."""
+    NVIDIA = "nvidia"
+    OPENAI = "openai"
     GROQ = "groq"
 
 
@@ -30,6 +41,9 @@ class ProviderConfig:
     models: List[str]
     enabled: bool = True
     rate_limit_retry_delay: int = 60  # seconds
+    reasoning_budget: Optional[int] = None
+    top_p: Optional[float] = None
+    request_timeout_seconds: int = 120
 
 
 class MultiProviderClient:
@@ -53,8 +67,46 @@ class MultiProviderClient:
     def _initialize_providers(self) -> List[ProviderConfig]:
         """Initialize provider configurations from environment."""
         providers = []
-        
-        # Groq (Primary and only provider - fast and free)
+
+        # NVIDIA NIM is the primary provider for the Lesson Architect. Its
+        # OpenAI-compatible chat-completions endpoint is called directly with
+        # httpx to avoid coupling the backend to another SDK.
+        nvidia_key = os.getenv("NVIDIA_API_KEY")
+        if nvidia_key:
+            providers.append(ProviderConfig(
+                name=ProviderType.NVIDIA,
+                api_key=nvidia_key,
+                base_url=os.getenv(
+                    "NVIDIA_API_BASE_URL",
+                    "https://integrate.api.nvidia.com/v1",
+                ).rstrip("/"),
+                models=[os.getenv(
+                    "NVIDIA_MODEL",
+                    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+                )],
+                rate_limit_retry_delay=60,
+                reasoning_budget=self._optional_int("NVIDIA_REASONING_BUDGET"),
+                top_p=self._optional_float("NVIDIA_TOP_P", 0.95),
+                request_timeout_seconds=self._positive_int(
+                    "NVIDIA_TIMEOUT_SECONDS", 120
+                ),
+            ))
+
+        # OpenAI is intentionally configuration-only so production can move
+        # from NVIDIA NIM to an OpenAI model without changing application code.
+        openai_key = os.getenv("OPENAI_API_KEY")
+        if openai_key:
+            providers.append(ProviderConfig(
+                name=ProviderType.OPENAI,
+                api_key=openai_key,
+                base_url=os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/"),
+                models=[os.getenv("OPENAI_MODEL", "gpt-4o-mini")],
+                rate_limit_retry_delay=60,
+                top_p=self._optional_float("OPENAI_TOP_P", 0.95),
+                request_timeout_seconds=self._positive_int("OPENAI_TIMEOUT_SECONDS", 120),
+            ))
+
+        # Groq remains a fallback for resilience and existing deployments.
         groq_key = os.getenv("GROQ_API_KEY")
         if groq_key:
             providers.append(ProviderConfig(
@@ -67,11 +119,18 @@ class MultiProviderClient:
                 ],
                 rate_limit_retry_delay=120  # Groq: wait 2 minutes
             ))
-        
-        if not providers:
-            raise ValueError(
-                "No LLM providers configured. Set GROQ_API_KEY environment variable"
+
+        # Honour an explicit primary-provider preference without removing the
+        # other configured provider from the fallback chain.
+        preferred_provider = os.getenv("LLM_PROVIDER", "").strip().casefold()
+        if preferred_provider:
+            providers.sort(
+                key=lambda provider: provider.name.value != preferred_provider
             )
+
+        # Do not fail application startup when a presentation/development
+        # environment has no provider credentials. The Lesson Architect API
+        # supplies deterministic CBC fallbacks for generation endpoints.
         
         self.logger.info(
             f"Initialized {len([p for p in providers if p.enabled])} provider(s): "
@@ -79,6 +138,30 @@ class MultiProviderClient:
         )
         
         return providers
+
+    def _optional_int(self, name: str) -> Optional[int]:
+        value = os.getenv(name)
+        if not value:
+            return None
+        try:
+            parsed = int(value)
+        except ValueError:
+            self.logger.warning("Ignoring invalid integer environment value", extra={"name": name})
+            return None
+        return parsed if parsed > 0 else None
+
+    def _positive_int(self, name: str, default: int) -> int:
+        return self._optional_int(name) or default
+
+    def _optional_float(self, name: str, default: float) -> float:
+        value = os.getenv(name)
+        if not value:
+            return default
+        try:
+            return float(value)
+        except ValueError:
+            self.logger.warning("Ignoring invalid decimal environment value", extra={"name": name})
+            return default
     
     def _is_rate_limited(self, provider: ProviderConfig) -> bool:
         """Check if provider is currently rate-limited."""
@@ -154,7 +237,7 @@ class MultiProviderClient:
                         temperature=temperature
                     )
                     
-                    self.logger.info(f"✅ Success with {provider.name}")
+                    self.logger.info(f"Success with {provider.name}")
                     return response
                     
                 except Exception as e:
@@ -195,12 +278,56 @@ class MultiProviderClient:
         temperature: float
     ) -> str:
         """Generate text using a specific provider."""
+        if provider.name == ProviderType.NVIDIA:
+            return await self._generate_nvidia(
+                provider, prompt, system, max_tokens, temperature
+            )
+        if provider.name == ProviderType.OPENAI:
+            return await self._generate_openai(provider, prompt, system, max_tokens, temperature)
         if provider.name == ProviderType.GROQ:
             return await self._generate_groq(
                 provider, prompt, system, max_tokens, temperature
             )
         else:
             raise ValueError(f"Unsupported provider: {provider.name}")
+
+    async def _generate_openai(
+        self,
+        provider: ProviderConfig,
+        prompt: str,
+        system: Optional[str],
+        max_tokens: int,
+        temperature: float,
+    ) -> str:
+        """Generate through OpenAI's chat-completions compatible endpoint."""
+        messages: List[Dict[str, str]] = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+        payload: Dict[str, Any] = {
+            "model": provider.models[0], "messages": messages,
+            "max_tokens": max_tokens, "temperature": temperature, "stream": False,
+        }
+        if provider.top_p is not None:
+            payload["top_p"] = provider.top_p
+        try:
+            async with httpx.AsyncClient(timeout=provider.request_timeout_seconds) as client:
+                response = await client.post(
+                    f"{provider.base_url}/chat/completions",
+                    headers={"Authorization": f"Bearer {provider.api_key}", "Content-Type": "application/json"},
+                    json=payload,
+                )
+        except httpx.HTTPError as exc:
+            raise RuntimeError(f"OpenAI request failed: {exc}") from exc
+        if response.is_error:
+            raise RuntimeError(f"OpenAI returned HTTP {response.status_code}: {response.text[:800].strip() or 'no error detail'}")
+        try:
+            content = response.json()["choices"][0]["message"].get("content")
+        except (KeyError, IndexError, TypeError, ValueError) as exc:
+            raise RuntimeError("OpenAI returned an invalid chat-completions response") from exc
+        if not isinstance(content, str) or not content.strip():
+            raise RuntimeError("OpenAI returned an empty completion")
+        return content.strip()
     
     async def _generate_groq(
         self,
@@ -227,6 +354,67 @@ class MultiProviderClient:
         
         response = await asyncio.to_thread(llm.invoke, messages)
         return response.content if hasattr(response, 'content') else str(response)
+
+    async def _generate_nvidia(
+        self,
+        provider: ProviderConfig,
+        prompt: str,
+        system: Optional[str],
+        max_tokens: int,
+        temperature: float,
+    ) -> str:
+        """Generate through NVIDIA NIM's OpenAI-compatible chat endpoint."""
+        messages: List[Dict[str, str]] = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+
+        payload: Dict[str, Any] = {
+            "model": provider.models[0],
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "stream": False,
+            "temperature": temperature,
+        }
+        if provider.top_p is not None:
+            payload["top_p"] = provider.top_p
+        if provider.reasoning_budget is not None:
+            payload["reasoning_budget"] = provider.reasoning_budget
+
+        headers = {
+            "Authorization": f"Bearer {provider.api_key}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+
+        try:
+            async with httpx.AsyncClient(
+                timeout=provider.request_timeout_seconds,
+            ) as client:
+                response = await client.post(
+                    f"{provider.base_url}/chat/completions",
+                    headers=headers,
+                    json=payload,
+                )
+        except httpx.HTTPError as exc:
+            raise RuntimeError(f"NVIDIA request failed: {exc}") from exc
+
+        if response.is_error:
+            detail = response.text[:800].strip()
+            raise RuntimeError(
+                f"NVIDIA returned HTTP {response.status_code}: {detail or 'no error detail'}"
+            )
+
+        try:
+            data = response.json()
+            message = data["choices"][0]["message"]
+            content = message.get("content")
+        except (KeyError, IndexError, TypeError, ValueError) as exc:
+            raise RuntimeError("NVIDIA returned an invalid chat-completions response") from exc
+
+        if not isinstance(content, str) or not content.strip():
+            raise RuntimeError("NVIDIA returned an empty completion")
+        return content.strip()
     
     def get_provider_status(self) -> Dict[str, Any]:
         """Get status of all providers."""

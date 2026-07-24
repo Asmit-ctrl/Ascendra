@@ -6,12 +6,13 @@ import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { 
   Calendar, FileText, ClipboardList, BookOpen, Users, 
-  MessageSquare, Award, Brain, TrendingUp, AlertCircle,
+  MessageSquare, Award, Brain, TrendingUp, AlertCircle, FileUp,
   BarChart3, Target, Lightbulb, GraduationCap, Sparkles
 } from 'lucide-react'
 
 // Import sub-components
-import { SchemeOfWorkGenerator } from './scheme-of-work-generator'
+import { SchemeWizard } from '@/components/scheme-wizard/scheme-wizard'
+import { MaterialLessonGenerator } from './material-lesson-generator'
 import { LessonPlanFromScheme } from './lesson-plan-from-scheme'
 import { AssessmentGenerator } from './assessment-generator'
 import { StudentMonitoring } from './student-monitoring'
@@ -48,7 +49,7 @@ export function EnhancedTeacherDashboard() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid grid-cols-4 lg:grid-cols-8 gap-2 h-auto p-2">
+        <TabsList className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-2 h-auto p-2">
           <TabsTrigger value="overview" className="flex-col gap-1 min-h-16 h-auto py-2">
             <BarChart3 className="h-4 w-4" />
             <span className="text-xs text-center leading-tight">Overview</span>
@@ -57,6 +58,12 @@ export function EnhancedTeacherDashboard() {
             <Calendar className="h-4 w-4" />
             <span className="text-xs text-center leading-tight">
               Schemes<br />of work
+            </span>
+          </TabsTrigger>
+          <TabsTrigger value="material-to-lesson" className="flex-col gap-1 min-h-16 h-auto py-2">
+            <FileUp className="h-4 w-4" />
+            <span className="text-xs text-center leading-tight">
+              Material<br />to lesson
             </span>
           </TabsTrigger>
           <TabsTrigger value="lesson-plans" className="flex-col gap-1 min-h-16 h-auto py-2">
@@ -94,7 +101,12 @@ export function EnhancedTeacherDashboard() {
 
         {/* Scheme of Work Tab */}
         <TabsContent value="scheme-of-work">
-          <SchemeOfWorkGenerator />
+          <SchemeWizard />
+        </TabsContent>
+
+        {/* Material-to-lesson workflow */}
+        <TabsContent value="material-to-lesson">
+          <MaterialLessonGenerator />
         </TabsContent>
 
         {/* Lesson Plans Tab */}

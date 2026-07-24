@@ -259,6 +259,9 @@ class LessonArchitectAgent:
         mode: SchemeMode = SchemeMode.STANDARD,
         teacher_id: str,
         language: str = "english",
+        selected_strands: Optional[List[Dict[str, Any]]] = None,
+        teacher_inputs: Optional[Dict[str, str]] = None,
+        indigenous_language: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Generate a scheme of work."""
         try:
@@ -316,6 +319,20 @@ class LessonArchitectAgent:
                     }
                     for s in range(1, 4)
                 ]
+
+            term_allocation = self._apply_strand_selection(
+                term_allocation,
+                selected_strands or [],
+            )
+            if not term_allocation:
+                raise AgentError(
+                    "The selected strands and sub-strands do not match the available curriculum allocation."
+                )
+
+            personalization_context = self._build_personalization_context(
+                teacher_inputs or {},
+                indigenous_language=indigenous_language,
+            )
             
             # Generate scheme rows
             scheme_rows = await self._generate_scheme_rows(
@@ -327,6 +344,7 @@ class LessonArchitectAgent:
                 lessons_per_week=lessons_per_week,
                 mode=mode,
                 language=language,
+                personalization_context=personalization_context,
             )
             
             # Create scheme metadata
@@ -387,6 +405,7 @@ class LessonArchitectAgent:
         lessons_per_week: int,
         mode: SchemeMode,
         language: str,
+        personalization_context: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Generate individual scheme rows (lesson-by-lesson breakdown for table format)."""
         rows = []
@@ -422,6 +441,7 @@ class LessonArchitectAgent:
                     lesson_start=lesson_num,
                     lessons_per_week=lessons_per_week,
                     language=language,
+                    personalization_context=personalization_context,
                 )
                 
                 rows.extend(lesson_rows)
@@ -455,6 +475,7 @@ class LessonArchitectAgent:
         lesson_start: int,
         lessons_per_week: int,
         language: str,
+        personalization_context: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Generate individual lesson rows for a sub-strand (table format).
 
@@ -476,7 +497,7 @@ class LessonArchitectAgent:
                 is_sw=is_kiswahili,
                 week_start=week_start,
                 lessons_per_week=lessons_per_week,
-                additional_info=None,
+                additional_info=personalization_context,
                 # Soft-fallback to synthesized context — workspace CLAUDE.md
                 # treats CURRICULUM_REGISTRY as optional guardrails, not a gate.
                 allow_synthetic_context=True,
@@ -497,6 +518,85 @@ class LessonArchitectAgent:
             raise AgentError(str(exc)) from exc
 
         return result["rows"]
+
+    @staticmethod
+    def _apply_strand_selection(
+        term_allocation: List[Dict[str, Any]],
+        selected_strands: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """Keep only teacher-selected official strands/sub-strands when supplied."""
+        if not selected_strands:
+            return term_allocation
+
+        selected_by_strand: Dict[str, set[str]] = {}
+        for item in selected_strands:
+            strand = str(item.get("strand", "")).strip()
+            sub_strands = item.get("subStrands", item.get("sub_strands", []))
+            if not strand or not isinstance(sub_strands, list):
+                continue
+            selected_by_strand[strand.casefold()] = {
+                str(sub_strand).strip().casefold()
+                for sub_strand in sub_strands
+                if str(sub_strand).strip()
+            }
+
+        if not selected_by_strand:
+            return term_allocation
+
+        filtered: List[Dict[str, Any]] = []
+        for allocation in term_allocation:
+            strand_name = str(allocation.get("strandName", allocation.get("name", ""))).strip()
+            allowed_sub_strands = selected_by_strand.get(strand_name.casefold())
+            if allowed_sub_strands is None:
+                continue
+            matched_sub_strands = [
+                sub_strand
+                for sub_strand in allocation.get("subStrands", [])
+                if str(sub_strand.get("name", "")).strip().casefold() in allowed_sub_strands
+            ]
+            if matched_sub_strands:
+                filtered.append({
+                    **allocation,
+                    "subStrands": matched_sub_strands,
+                })
+        return filtered
+
+    @staticmethod
+    def _build_personalization_context(
+        teacher_inputs: Dict[str, str],
+        *,
+        indigenous_language: Optional[str] = None,
+    ) -> Optional[str]:
+        """Turn optional teacher detail fields into bounded prompt guidance."""
+        labels = {
+            "keyInquiryQuestions": "Teacher-preferred key inquiry questions",
+            "learningOutcomes": "Teacher-preferred learning outcomes",
+            "learningExperiences": "Teacher-preferred learning experiences",
+            "learningResources": "Available learning resources",
+            "assessmentMethods": "Teacher-preferred assessment methods",
+        }
+        lines = []
+        for key, label in labels.items():
+            value = teacher_inputs.get(key, "").strip()
+            if value:
+                lines.append(f"- {label}: {value[:1500]}")
+        source_material = teacher_inputs.get("sourceMaterial", "").strip()
+        if source_material:
+            from ..rag import retrieve_relevant_chunks
+            query = " ".join(v for v in teacher_inputs.values() if v)[:1000]
+            retrieved = retrieve_relevant_chunks(source_material, query)
+            if retrieved:
+                lines.append(
+                    "- Retrieved source-material excerpts (use these as grounded context):\n"
+                    + "\n\n".join(retrieved)
+                )
+        if indigenous_language:
+            lines.append(
+                f"- Indigenous language context: use culturally respectful examples for {indigenous_language}."
+            )
+        if not lines:
+            return None
+        return "Teacher personalization guidance (follow it when it does not conflict with official KICD curriculum):\n" + "\n".join(lines)
 
     # NOTE: The block below (the original per-substrand LLM prompt and JSON
     # parsing) is retained as dead reference until Phase 2 (lesson plans) ships.

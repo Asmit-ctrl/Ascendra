@@ -75,16 +75,16 @@ export function SubjectSelectionStep() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {subjects.map((subject) => (
           <Button
-            key={subject.name}
-            variant={selectedSubject === subject.name ? 'default' : 'outline'}
+            key={subject}
+            variant={selectedSubject === subject ? 'default' : 'outline'}
             className="h-16 text-left justify-start relative"
-            onClick={() => handleSubjectSelect(subject.name)}
+            onClick={() => handleSubjectSelect(subject)}
           >
             <div className="flex-1">
-              <div className="font-semibold">{subject.name}</div>
-              <div className="text-xs opacity-70 capitalize">{subject.category}</div>
+              <div className="font-semibold">{subject}</div>
+              <div className="text-xs opacity-70 capitalize">{getSubjectCategory(subject)}</div>
             </div>
-            {selectedSubject === subject.name && (
+            {selectedSubject === subject && (
               <CheckCircle2 className="h-5 w-5 ml-2" />
             )}
           </Button>
@@ -128,5 +128,19 @@ export function SubjectSelectionStep() {
       )}
     </div>
   );
+}
+
+function getSubjectCategory(subject: string): string {
+  const languageSubjects = [
+    'English',
+    'English Activities',
+    'Kiswahili',
+    'Indigenous Language',
+    'Arabic',
+    'French',
+    'German',
+    'Mandarin',
+  ];
+  return languageSubjects.includes(subject) ? 'language' : 'learning area';
 }
 
