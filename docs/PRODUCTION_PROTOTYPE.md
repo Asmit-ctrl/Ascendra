@@ -9,12 +9,13 @@ NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
 SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
 NEXT_PUBLIC_AI_AGENTS_URL=https://<ai-agents-service>
-AUTH_WALL_ENABLED=true
+AUTH_WALL_ENABLED=false
 ```
 
-`AUTH_WALL_ENABLED=true` protects `/teacher/*` and `/student/*`. Users are
-sent to `/login` until they have a valid Supabase session. Do not set
-`NEXT_PUBLIC_AUTH_DEMO_BYPASS` in Vercel; it is for local demonstrations only.
+Keep `AUTH_WALL_ENABLED=false` for the no-API presentation prototype. When
+Supabase Auth is ready, set it to `true` to protect `/teacher/*` and
+`/student/*`; users will then be sent to `/login` until they have a valid
+Supabase session.
 
 ## AI agents service
 

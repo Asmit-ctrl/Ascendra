@@ -51,7 +51,9 @@ export async function middleware(request: NextRequest) {
   // production default.
   const protectedRoute = request.nextUrl.pathname.startsWith('/teacher') || request.nextUrl.pathname.startsWith('/student');
   const demoBypass = process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_AUTH_DEMO_BYPASS === 'true';
-  const authWallEnabled = process.env.AUTH_WALL_ENABLED !== 'false' && process.env.NODE_ENV === 'production';
+  // Authentication is opt-in. Presentation deployments can run without a
+  // Supabase project; a real production deployment enables this explicitly.
+  const authWallEnabled = process.env.AUTH_WALL_ENABLED === 'true';
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
